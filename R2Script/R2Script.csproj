@@ -40,8 +40,42 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Lex\LexException.cs" />
+    <Compile Include="Lex\Token.cs" />
+    <Compile Include="Lex\TokenType.cs" />
+    <Compile Include="Parse\AST\Expression.cs" />
+    <Compile Include="Parse\AST\Expr_Binary.cs" />
+    <Compile Include="Parse\AST\Expr_Call.cs" />
+    <Compile Include="Parse\AST\Expr_Local.cs" />
+    <Compile Include="Parse\AST\Expr_Value.cs" />
+    <Compile Include="Parse\AST\Expr_ValueList.cs" />
+    <Compile Include="Parse\AST\Expr_Variable.cs" />
+    <Compile Include="Parse\AST\Statement.cs" />
+    <Compile Include="Parse\AST\Stmt_Assign.cs" />
+    <Compile Include="Parse\AST\Stmt_Break.cs" />
+    <Compile Include="Parse\AST\Stmt_Call.cs" />
+    <Compile Include="Parse\AST\Stmt_Continue.cs" />
+    <Compile Include="Parse\AST\Stmt_For.cs" />
+    <Compile Include="Parse\AST\Stmt_Function.cs" />
+    <Compile Include="Parse\AST\Stmt_IF.cs" />
+    <Compile Include="Parse\AST\Stmt_Block.cs" />
+    <Compile Include="Parse\AST\Stmt_Return.cs" />
+    <Compile Include="Parse\AST\Stmt_Var.cs" />
+    <Compile Include="Parse\AST\Stmt_While.cs" />
+    <Compile Include="Parse\ParseException.cs" />
+    <Compile Include="Parse\Parser.cs" />
+    <Compile Include="Parse\SymbolTable.cs" />
+    <Compile Include="Translation\ASM\ASMCode.cs" />
+    <Compile Include="Translation\ASM\ASMInstruction.cs" />
+    <Compile Include="Translation\ASM\ASMSnippet.cs" />
+    <Compile Include="Translation\FunctionFactory.cs" />
+    <Compile Include="Translation\OffsetTable.cs" />
+    <Compile Include="Translation\TranslationException.cs" />
+    <Compile Include="Translation\Translator.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Lex\Tokenizer.cs" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
