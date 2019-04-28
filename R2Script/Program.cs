@@ -24,10 +24,11 @@ namespace R2Script
 			}*/
 			Parser ps = new Parser(code);
 			var s = ps.Parse();
-			FunctionFactory ff = FunctionFactory.FromFunction(s.SymbolTable, (Stmt_Function)s.Statements[0]);
+			Translator t = Translator.Create(s);
+			FunctionFactory ff = FunctionFactory.FromFunction(t, (Stmt_Function)s.Statements[0]);
 			//Console.WriteLine(ff.OffsetTables.ElementAt(0).Value.Offsets["j"]);
-			Console.WriteLine(ff.GenerateCode().GetCode());
-			//Console.WriteLine(ff.MaxStack);
+			//Console.WriteLine(ff.GenerateCode().GetCode());
+			Console.WriteLine(ff.MaxStack);
 		}
 	}
 }

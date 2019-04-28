@@ -211,16 +211,34 @@ namespace R2Script.Lex
 						case '9':
 							{
 								StringBuilder sb = new StringBuilder(50);
-								do
+								char n = ch;
+								sb.Append(ch);
+								Nextc();
+								if (ch == 'x' && n == '0')
 								{
 									sb.Append(ch);
 									Nextc();
-									/*if (ch == '.')
+									while (char.IsDigit(ch) ||
+									(ch >= 'a' && ch <= 'f') ||
+									(ch >= 'A' && ch <= 'F'))
 									{
-										sb.Append('.');
+										sb.Append(ch);
 										Nextc();
-									}*/
-								} while (char.IsDigit(ch));
+									}
+								}
+								else
+								{
+									while (char.IsDigit(ch))
+									{
+										sb.Append(ch);
+										Nextc();
+										/*if (ch == '.')
+										{
+											sb.Append('.');
+											Nextc();
+										}*/
+									}
+								}
 								token.Type = TokenType.TK_NUMBER;
 								token.Value = sb.ToString();
 								return 0;
@@ -229,39 +247,19 @@ namespace R2Script.Lex
 							{
 								Nextc();
 								StringBuilder sb = new StringBuilder(1024);
+								sb.Append("\"");
 								while (ch != '\"')
 								{
 									char c = ch;
 									if (ch == '\\')
 									{
+										sb.Append(c);
 										Nextc();
-										switch (ch)
-										{
-											case 'n':
-												c = '\n';
-												break;
-											case '\\':
-												c = '\\';
-												break;
-											case 'r':
-												c = '\r';
-												break;
-											case 't':
-												c = '\t';
-												break;
-											case '\"':
-												c = '\"';
-												break;
-											case '\'':
-												c = '\'';
-												break;
-											default:
-												return ERR_LEX_UNAVAILABLE_ESC;
-										}
 									}
 									sb.Append(c);
 									Nextc();
 								}
+								sb.Append("\"");
 								Nextc();//pass '\"'
 								token.Type = TokenType.TK_STRING;
 								token.Value = sb.ToString();

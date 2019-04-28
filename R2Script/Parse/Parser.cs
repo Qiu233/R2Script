@@ -119,9 +119,7 @@ namespace R2Script.Parse
 			Expr_ValueList vl = new Expr_ValueList(Line);
 			Accept('[');
 			if (!Match(']'))
-			{
 				vl.ValueList.Add(E());
-			}
 			while (Match(','))
 			{
 				Accept();//,
@@ -135,33 +133,13 @@ namespace R2Script.Parse
 		{
 			string name = AcceptName();
 			AddSymbol(name, Line);
-			Stmt_Var.Variable v = null;
+			Stmt_Var.Variable v = new Stmt_Var.Variable();
+			v.Name = name;
 			if (Match('='))
 			{
-				v = new Stmt_Var.VariableValue();
-				v.Name = name;
 				Accept();//=
-				Expression val = E();
-				((Stmt_Var.VariableValue)v).InitialValue = val;
-				return v;
+				v.InitialValue = E();
 			}
-			else if (Match('['))
-			{
-				v = new Stmt_Var.VariableArray();
-				v.Name = name;
-				Accept();//[
-				Expression val = E();
-				((Stmt_Var.VariableArray)v).Length = val;
-				Accept();//]
-				if (Match('='))
-				{
-					Accept();//=
-					((Stmt_Var.VariableArray)v).InitialValue = GetValueArray();
-				}
-				return v;
-			}
-			v = new Stmt_Var.VariableValue();
-			v.Name = name;
 			return v;
 		}
 		public Stmt_Var.Variable GetVariable()
@@ -223,7 +201,7 @@ namespace R2Script.Parse
 			else if (Match(TokenType.TK_KW_FUNCTION))
 			{
 				Stmt_Function func = new Stmt_Function(Line);
-				func.Locals = new List<string>();
+				func.Args = new List<string>();
 				Accept();//function
 				func.Name = AcceptName();
 				AddSymbol(func.Name, Line);
@@ -232,7 +210,7 @@ namespace R2Script.Parse
 				while (Match(TokenType.TK_NAME))
 				{
 					string name = AcceptName();
-					func.Locals.Add(name);
+					func.Args.Add(name);
 					argIdens.Add(new SymbolIden(name, Line));
 					if (Match(','))
 						Accept();
@@ -560,6 +538,10 @@ namespace R2Script.Parse
 				Expression e = E();
 				Accept(')');
 				return e;
+			}
+			else if (Match('['))
+			{
+				return GetValueArray();
 			}
 			else if (Match(TokenType.TK_STRING))
 			{
