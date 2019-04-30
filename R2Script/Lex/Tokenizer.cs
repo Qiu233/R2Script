@@ -41,7 +41,7 @@ namespace R2Script.Lex
 			if (Code.Length > Index)
 				ch = Code[Index++];
 			else
-				unchecked { ch = (char)(-1); }
+				ch = (char)0;
 		}
 		private int Get_Token_1(int eq, int n1, int n2)
 		{
@@ -115,7 +115,7 @@ namespace R2Script.Lex
 			{
 				while (true)
 				{
-					if ((Int16)ch == -1)
+					if (ch == 0)
 					{
 						token.Type = (TokenType)(-1);
 						return ERR_LEX_END_OF_FILE;
@@ -123,6 +123,27 @@ namespace R2Script.Lex
 					token.Line = Line;
 					switch (ch)
 					{
+						case '$':
+							{
+								Nextc();
+								StringBuilder sb = new StringBuilder(1024);
+								while (ch != 0 && ch != '$')
+								{
+									if (ch == '\\')
+									{
+										Nextc();
+										if (ch == '$')
+											sb.Append('$');
+										else sb.Append("\\" + ch);
+									}
+									sb.Append(ch);
+									Nextc();
+								}
+								Nextc();
+								token.Type = TokenType.TK_SEG_ASM;
+								token.Value = sb.ToString();
+								return 0;
+							}
 						case '(':
 						case '[':
 						case ')':
@@ -218,9 +239,9 @@ namespace R2Script.Lex
 								{
 									sb.Append(ch);
 									Nextc();
-									while (char.IsDigit(ch) ||
+									while (ch != 0 && (char.IsDigit(ch) ||
 									(ch >= 'a' && ch <= 'f') ||
-									(ch >= 'A' && ch <= 'F'))
+									(ch >= 'A' && ch <= 'F')))
 									{
 										sb.Append(ch);
 										Nextc();
@@ -228,7 +249,7 @@ namespace R2Script.Lex
 								}
 								else
 								{
-									while (char.IsDigit(ch))
+									while (ch != 0 && char.IsDigit(ch))
 									{
 										sb.Append(ch);
 										Nextc();
@@ -248,7 +269,7 @@ namespace R2Script.Lex
 								Nextc();
 								StringBuilder sb = new StringBuilder(1024);
 								sb.Append("\"");
-								while (ch != '\"')
+								while (ch != 0 && ch != '\"')
 								{
 									char c = ch;
 									if (ch == '\\')
@@ -303,6 +324,9 @@ namespace R2Script.Lex
 										break;
 									case "function":
 										token.Type = TokenType.TK_KW_FUNCTION;
+										break;
+									case "naked":
+										token.Type = TokenType.TK_KW_NAKED;
 										break;
 									case "var":
 										token.Type = TokenType.TK_KW_VAR;

@@ -51,6 +51,7 @@
     <Compile Include="Parse\AST\Expr_ValueList.cs" />
     <Compile Include="Parse\AST\Expr_Variable.cs" />
     <Compile Include="Parse\AST\Statement.cs" />
+    <Compile Include="Parse\AST\Stmt_ASM.cs" />
     <Compile Include="Parse\AST\Stmt_Assign.cs" />
     <Compile Include="Parse\AST\Stmt_Break.cs" />
     <Compile Include="Parse\AST\Stmt_Call.cs" />

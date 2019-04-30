@@ -212,6 +212,11 @@ namespace R2Script.Parse
 				Stmt_Function func = new Stmt_Function(Line);
 				func.Args = new List<string>();
 				Accept();//function
+				if (Match(TokenType.TK_KW_NAKED))
+				{
+					Accept();//naked
+					func.Naked = true;
+				}
 				func.Name = AcceptName();
 				AddSymbol(func.Name, Line);
 				Accept('(');
@@ -314,6 +319,14 @@ namespace R2Script.Parse
 					return new Stmt_Call(Line) { Name = name, Arguments = args };
 				}
 				throw new ParseException("Unknown statement", Token.Line);
+			}
+			#endregion
+			#region ASM
+			else if (Match(TokenType.TK_SEG_ASM))
+			{
+				var s = new Stmt_ASM(Line) { ASM = Token.Value };
+				Accept();//ASM
+				return s;
 			}
 			#endregion
 			return null;

@@ -44,8 +44,10 @@ namespace R2Script.Lex
 		TK_KW_BREAK,           //break
 		TK_KW_CONTINUE,           //break
 		TK_KW_FUNCTION,           //function
+		TK_KW_NAKED,           //naked
 		TK_KW_VAR,           //var
 
+		TK_SEG_ASM,
 
 	}
 }

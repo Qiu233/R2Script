@@ -8,6 +8,7 @@ namespace R2Script.Parse.AST
 	public class Stmt_Function : Statement
 	{
 		public string Name;
+		public bool Naked;
 		public List<string> Args;
 		public Stmt_Block Body;
 

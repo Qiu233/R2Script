@@ -68,14 +68,15 @@ namespace R2Script.Translation
 		{
 			int j = Constants.FindIndex(t =>
 			{
-				if (t is ConstantArray) return false; else return ((ConstantString)t).Content == s;
+				if (t is ConstantArray) return false;
+				else return ((ConstantString)t).Content == s;
 			});
-			if (j < 0)//duplicated
+			if (j < 0)
 			{
 				Constants.Add(new ConstantString(s));
 				return Constants.Count - 1;
 			}
-			else
+			else//duplicated
 				return j;
 		}
 		public int AddArray(List<string> values)

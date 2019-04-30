@@ -20,6 +20,7 @@ namespace R2Script.Translation
 			get;
 		}
 		public string Name => Function.Name;
+		public bool Naked => Function.Naked;
 
 		private Stack<OffsetTable> OffsetTables
 		{
@@ -125,31 +126,59 @@ namespace R2Script.Translation
 				return "-" + (off + 1);
 		}
 
+		private ASMCode GetFunctionHead()
+		{
+			if (Naked)
+				return ASMSnippet.FromEmpty();
+			return ASMSnippet.FromCode(
+				new ASMCode[] {
+					(ASMInstruction)"push bp",
+					(ASMInstruction)"mov bp,sp"
+			});
+		}
+		private ASMCode GetFunctionEnd()
+		{
+			var asm = ASMSnippet.FromEmpty();
+			if (!Naked)
+				asm.Content.Add((ASMInstruction)"pop bp");
+			asm.Content.Add((ASMInstruction)"ret");
+			return asm;
+		}
+
 		public ASMCode GenerateCode()
 		{
-			var asm = ASMSnippet.FromCode(
-					new ASMCode[] {
-						(ASMInstruction)"push bp",
-						(ASMInstruction)"mov bp,sp",
-						GenerateBody(),
-				});
+			var asm = ASMSnippet.FromEmpty();
+			asm.Content.Add(GetFunctionHead());
+			asm.Content.Add(GenerateBody());
 			if (!asm.GetCode().Trim().EndsWith("ret"))
-			{
-				asm.Instructions.Add((ASMInstruction)"pop bp");
-				asm.Instructions.Add((ASMInstruction)"ret");
-			}
+				asm.Content.Add(GetFunctionEnd());
 			return asm;
 		}
 		private ASMCode GenerateBody()
 		{
-			ASMSnippet snippet = ASMSnippet.FromEmpty();
-			foreach (var stmt in Function.Body.Statements)
+			if (!Naked)
 			{
-				var s = GenerateStatement(stmt);
-				if (s == null) continue;
-				snippet.Instructions.Add(s);
+				ASMSnippet snippet = ASMSnippet.FromEmpty();
+				foreach (var stmt in Function.Body.Statements)
+				{
+					var s = GenerateStatement(stmt);
+					if (s == null) continue;
+					snippet.Content.Add(s);
+				}
+				return snippet;
 			}
-			return snippet;
+			else
+			{
+				var e = ASMSnippet.FromEmpty();
+				foreach (var stmt in Function.Body.Statements)
+				{
+					if (!(stmt is Stmt_ASM))
+						throw new TranslationException("Only native ASMs is allowed to be in a naked function", stmt.Line);
+					var sa = stmt as Stmt_ASM;
+					e.Content.Add((ASMInstruction)(sa.ASM + "\n"));
+				}
+				return e;
+			}
 		}
 		private ASMCode GenerateStatement(Statement stmt)
 		{
@@ -230,6 +259,10 @@ namespace R2Script.Translation
 			{
 				return GenerateCall(sc.Name, sc.Arguments, sc.Line);
 			}
+			else if (stmt is Stmt_ASM sasm)
+			{
+				return ASMSnippet.FromASMCode(sasm.ASM);
+			}
 			throw new TranslationException("Unexpected statement", stmt.Line);
 		}
 		private ASMCode GenerateCall(string name, Expr_ValueList args, int line)
@@ -238,15 +271,15 @@ namespace R2Script.Translation
 			ASMSnippet asm = ASMSnippet.FromEmpty();
 			for (int i = c - 1; i >= 0; i--)
 			{
-				asm.Instructions.Add(
+				asm.Content.Add(
 					GenerateExpressionToPush(args.ValueList[i]));
 			}
 			if (Translator.GlobalNameManager.GlobalNames.Contains(name))
-				asm.Instructions.Add((ASMInstruction)$"call {GlobalNameManager.GetGlobalName(name)}");
+				asm.Content.Add((ASMInstruction)$"call {GlobalNameManager.GetGlobalName(name)}");
 			else
 				throw new TranslationException($"Unknown global(function):'{name}'", line);
 			if (c > 0)
-				asm.Instructions.Add((ASMInstruction)$"add sp,{c}");
+				asm.Content.Add((ASMInstruction)$"add sp,{c}");
 			return asm;
 		}
 		private ASMCode GenerateExpressionToPush(Expression e)
@@ -279,7 +312,7 @@ namespace R2Script.Translation
 				if (eval.Value.StartsWith("\"") || eval.Value.StartsWith("\'"))
 				{
 					int n = Translator.ConstantManager.AddString(
-						eval.Value.Substring(1, eval.Value.Length - 2));
+						eval.Value.Substring(0, eval.Value.Length));
 
 					return ASMSnippet.FromCode(
 						new ASMCode[] {
@@ -386,7 +419,7 @@ namespace R2Script.Translation
 				if (eval.Value.StartsWith("\"") || eval.Value.StartsWith("\'"))
 				{
 					int n = Translator.ConstantManager.AddString(
-						eval.Value.Substring(1, eval.Value.Length - 2));
+						eval.Value.Substring(0, eval.Value.Length));
 
 					return ASMSnippet.FromCode(
 						new ASMCode[] {
@@ -493,7 +526,7 @@ namespace R2Script.Translation
 				if (eval.Value.StartsWith("\"") || eval.Value.StartsWith("\'"))
 				{
 					int n = Translator.ConstantManager.AddString(
-						eval.Value.Substring(1, eval.Value.Length - 2));
+						eval.Value.Substring(0, eval.Value.Length));
 
 					return ASMSnippet.FromCode(
 						new ASMCode[] {

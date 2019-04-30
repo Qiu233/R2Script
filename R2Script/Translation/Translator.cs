@@ -1,5 +1,6 @@
 ﻿using R2Script.Parse;
 using R2Script.Parse.AST;
+using R2Script.Translation.ASM;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -101,15 +102,23 @@ namespace R2Script.Translation
 		}
 		public string CompileConstants()
 		{
-			//throw new NotImplementedException();
-			return "";
+			StringBuilder sb = new StringBuilder();
+			for (int i = 0; i < ConstantManager.Constants.Count; i++)
+			{
+				ConstantManager.Constant c = ConstantManager.Constants[i];
+				if (c is ConstantManager.ConstantString cs)
+				{
+					sb.Append($"{ConstantManager.GetConstant(i)}: dw {cs.Content},0\n");
+				}
+			}
+			return sb.ToString();
 		}
 		public string CompileFunctions()
 		{
 			StringBuilder sb = new StringBuilder();
 			foreach (var f in Functions)
 			{
-				sb.Append($"; function {f.Name}({string.Join(",", f.Function.Args)})\n");
+				sb.Append($"; function {(f.Naked ? "naked " : "")}{f.Name}({string.Join(",", f.Function.Args)})\n");
 				sb.Append($"{GlobalNameManager.GetGlobalName(f.Name)}:\n");
 				sb.Append(f.GenerateCode().GetCode());
 				sb.Append("\n\n");
@@ -124,7 +133,10 @@ namespace R2Script.Translation
 				if (v.Key.InitialValue is Expr_Value ev)
 				{
 					sb.Append($"{GlobalNameManager.GetGlobalName(v.Key.Name)}: ");
-					sb.Append($"dw {ev.Value}\n");
+					sb.Append($"dw {ev.Value}");
+					if (ev.Value.StartsWith("\""))
+						sb.Append($",0");
+					sb.Append("\n");
 				}
 				else if (v.Key.InitialValue is Expr_Binary eb)
 				{
@@ -172,9 +184,13 @@ namespace R2Script.Translation
 		{
 			if (!GlobalNameManager.GlobalNames.Contains("main"))
 				throw new TranslationException("Function 'main' is not defined", 0);
-			return $"call {GlobalNameManager.GetGlobalName("main")}\n" +
+			string function = CompileFunctions();
+			string data = CompileData();
+			string cons = CompileConstants();
+			string code = $"call {GlobalNameManager.GetGlobalName("main")}\n" +
 				$"__mainLoop:jmp __mainLoop" +
-				$"\n{CompileConstants()}\n{CompileData()}\n{CompileFunctions()}";
+				$"\n{cons}\n{data}\n{function}";
+			return code;
 		}
 	}
 }
