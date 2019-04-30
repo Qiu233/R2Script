@@ -133,12 +133,21 @@ namespace R2Script.Parse
 		{
 			string name = AcceptName();
 			AddSymbol(name, Line);
-			Stmt_Var.Variable v = new Stmt_Var.Variable();
-			v.Name = name;
+			Stmt_Var.Variable v = null;
 			if (Match('='))
 			{
+				v = new Stmt_Var.Variable();
+				v.Name = name;
 				Accept();//=
 				v.InitialValue = E();
+			}
+			else if (Match('['))
+			{
+				v = new Stmt_Var.VariableArray();
+				v.Name = name;
+				Accept();//(
+				v.InitialValue = E();
+				Accept(']');
 			}
 			return v;
 		}
@@ -561,6 +570,22 @@ namespace R2Script.Parse
 				eb.Right = ev;
 				return eb;
 			}
+			else if (Match('*'))//value
+			{
+				Accept();//*
+				Expr_Ref r = new Expr_Ref(Line);
+				r.Value = E();
+				r.Type = Expr_Ref.RefType.Value;
+				return r;
+			}
+			else if (Match('&'))//address
+			{
+				Accept();//&
+				Expr_Ref r = new Expr_Ref(Line);
+				r.Value = E();
+				r.Type = Expr_Ref.RefType.Address;
+				return r;
+			}
 			else if (Match(TokenType.TK_NUMBER))
 			{
 				Expr_Value ev = new Expr_Value(Line);
@@ -570,8 +595,7 @@ namespace R2Script.Parse
 			}
 			else if (Match(TokenType.TK_NAME))
 			{
-				string name = Token.Value;
-				Accept();//name
+				string name = AcceptName();
 				if (Match('('))
 				{
 					return CallFunction(name, GetActualArguments());

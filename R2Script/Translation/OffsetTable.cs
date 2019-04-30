@@ -11,9 +11,15 @@ namespace R2Script.Translation
 		{
 			get;
 		}
-		public OffsetTable()
+		public int Count => Offsets.Count;
+		public int OffsetBase
+		{
+			get;
+		}
+		public OffsetTable(int offsetBase)
 		{
 			this.Offsets = new Dictionary<string, int>();
+			this.OffsetBase = offsetBase;
 		}
 		public void Add(string name, int offset)
 		{

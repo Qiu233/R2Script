@@ -11,35 +11,79 @@ namespace R2Script.Translation
 {
 	public class FunctionFactory
 	{
-		private int _maxStack;
 		public Translator Translator
 		{
 			get;
 		}
-		private Stmt_Function Function
+		public Stmt_Function Function
 		{
 			get;
 		}
-		public int MaxStack
-		{
-			get => _maxStack;
-		}
-		public Dictionary<SymbolTable, OffsetTable> OffsetTables
+		public string Name => Function.Name;
+
+		private Stack<OffsetTable> OffsetTables
 		{
 			get;
 		}
+		private OffsetTable RootOffsetTable
+		{
+			get;
+		}
+		private int StackUse
+		{
+			get;
+			set;
+		}
+		private void PushNewOffsetTable()
+		{
+			var t = new OffsetTable(StackUse);
+			OffsetTables.Push(t);
+		}
+
+		private void PopNewOffsetTable()
+		{
+			StackUse = OffsetTables.Pop().OffsetBase;
+		}
+
+		private void AddOffset(string name, int offset)
+		{
+			OffsetTables.Peek().Add(name, offset);
+		}
+
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="name"></param>
+		/// <param name="offset"></param>
+		/// <returns>true if exists,else false</returns>
+		private bool SearchOffset(string name, out int offset)
+		{
+			foreach (var t in OffsetTables)
+			{
+				var r = t.Offsets.Where(i => i.Key == name);
+				if (r.Count() > 0)
+				{
+					offset = r.ElementAt(0).Value;
+					return true;
+				}
+			}
+			offset = 0;
+			return false;
+		}
+
 		private FunctionFactory(Translator translator, Stmt_Function func)
 		{
 			this.Translator = translator;
 			this.Function = func;
-			this.OffsetTables = new Dictionary<SymbolTable, OffsetTable>();
+			this.OffsetTables = new Stack<OffsetTable>();
+			this.RootOffsetTable = new OffsetTable(0);
+			OffsetTables.Push(RootOffsetTable);
 		}
 		public static FunctionFactory FromFunction(Translator translator, Stmt_Function func)
 		{
 			var n = new FunctionFactory(translator, func);
 			CheckLocals(func.Body.SymbolTable, new List<string>());
 			n.MapArgs();
-			n.MapLocals(func.Body.SymbolTable, 0);
 			return n;
 		}
 
@@ -64,45 +108,17 @@ namespace R2Script.Translation
 
 		private void MapArgs()
 		{
-			if (!OffsetTables.ContainsKey(Function.Body.SymbolTable))
-				OffsetTables[Function.Body.SymbolTable] = new OffsetTable();
-			var table = OffsetTables[Function.Body.SymbolTable];
 			int bs = -1;
 			foreach (var t in Function.Body.SymbolTable.Symbols)
 			{
 				if (t is SymbolIden &&
 					Function.Args.Contains((t as SymbolIden).Name))
-					table.Add((t as SymbolIden).Name, bs--);
+					RootOffsetTable.Add((t as SymbolIden).Name, bs--);
 			}
 		}
-		private OffsetTable MapLocals(SymbolTable sym, int stackBase)
-		{
-			if (!OffsetTables.ContainsKey(sym))
-				OffsetTables[sym] = new OffsetTable();
-			var table = OffsetTables[sym];
 
-			sym.Symbols.ForEach(t =>
-			{
-				if (t is SymbolIden)
-				{
-					var si = t as SymbolIden;
-					if (Function.Args.Contains(si.Name))
-						return;
-					table.Add(si.Name, stackBase++);
-					_maxStack = Math.Max(_maxStack, stackBase);
-				}
-				else
-				{
-					var st = t as SymbolTable;
-					MapLocals(st, stackBase);
-				}
-			});
-			return table;
-		}
-
-		private string GetLocalOffset(string n)
+		private string GetLocalOffset(int off)
 		{
-			int off = OffsetTables[Function.Body.SymbolTable].Offsets[n];
 			if (off < 0)//args
 				return "+" + (0 - off + 1);//-1 to +2/   -2 to +3 and so on
 			else//locals
@@ -111,15 +127,18 @@ namespace R2Script.Translation
 
 		public ASMCode GenerateCode()
 		{
-			return
-				ASMSnippet.FromCode(
+			var asm = ASMSnippet.FromCode(
 					new ASMCode[] {
 						(ASMInstruction)"push bp",
 						(ASMInstruction)"mov bp,sp",
 						GenerateBody(),
-						(ASMInstruction)"pop bp",
-						(ASMInstruction)"ret"
 				});
+			if (!asm.GetCode().Trim().EndsWith("ret"))
+			{
+				asm.Instructions.Add((ASMInstruction)"pop bp");
+				asm.Instructions.Add((ASMInstruction)"ret");
+			}
+			return asm;
 		}
 		private ASMCode GenerateBody()
 		{
@@ -138,27 +157,59 @@ namespace R2Script.Translation
 			{
 				foreach (var variable in v.Variables)
 				{
+					int off = StackUse;
+					AddOffset(variable.Name, off);
 					if (variable.InitialValue == null)
 						continue;
 					if (!(variable is Stmt_Var.Variable))
 						continue;
 					Stmt_Var.Variable vv = variable as Stmt_Var.Variable;
-					return ASMSnippet.FromCode(
-						new ASMCode[] {
-								GenerateExpressionToMem(vv.InitialValue, $"[bp{GetLocalOffset(vv.Name)}]"),
+					if (vv is Stmt_Var.VariableArray)
+					{
+						int len = 0;
+						if (vv.InitialValue is Expr_Binary eb)
+						{
+							Expression ex = null;
+							if (!((ex = eb.TryContract()) is Expr_Value))
+								throw new TranslationException("Array's length should be a constant", eb.Line);
+							len = Convert.ToInt32((ex as Expr_Value).Value);
+						}
+						else if (vv.InitialValue is Expr_Value ev)
+						{
+							len = Convert.ToInt32(ev.Value);
+						}
+						else
+							throw new TranslationException("Array's length should be a constant", v.Line);
+						StackUse += len + 1;
+
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"mov r0,bp",
+								(ASMInstruction)$"add r0,{GetLocalOffset(off+1)}",
+								(ASMInstruction)$"mov [bp{GetLocalOffset(off)}],r0",
 						});
+					}
+					else
+					{
+						StackUse++;
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToMem(vv.InitialValue, $"[bp{GetLocalOffset(off)}]"),
+							});
+					}
 				}
 				return null;
 			}
 			else if (stmt is Stmt_Assign sa)
 			{
-				if (!Function.Ar gs.Contains(sa.Name) &&
+				bool b = SearchOffset(sa.Name, out int off);
+				if (!b &&
 					!Translator.GlobalNameManager.GlobalNames.Contains(sa.Name))
-					throw new TranslationException($"Unknown local or variable:'{sa.Name}'", sa.Line);
-				if (Function.Ar gs.Contains(sa.Name))
+					throw new TranslationException($"Unknown global or local:'{sa.Name}'", sa.Line);
+				if (b)
 					return ASMSnippet.FromCode(
 						new ASMCode[] {
-							GenerateExpressionToMem(sa.Value, $"[bp{GetLocalOffset(sa.Name)}]"),
+							GenerateExpressionToMem(sa.Value, $"[bp{GetLocalOffset(off)}]"),
 						});
 				else
 					return ASMSnippet.FromCode(
@@ -168,15 +219,20 @@ namespace R2Script.Translation
 			}
 			else if (stmt is Stmt_Return sr)
 			{
-				return GenerateExpressionToReg(sr.Value, "r0");
+				return ASMSnippet.FromCode(
+					new ASMCode[] {
+						GenerateExpressionToReg(sr.Value, "r0"),
+						(ASMInstruction)"pop bp",
+						(ASMInstruction)"ret",
+					});
 			}
 			else if (stmt is Stmt_Call sc)
 			{
-				return GenerateCall(sc.Name, sc.Arguments);
+				return GenerateCall(sc.Name, sc.Arguments, sc.Line);
 			}
 			throw new TranslationException("Unexpected statement", stmt.Line);
 		}
-		private ASMCode GenerateCall(string name, Expr_ValueList args)
+		private ASMCode GenerateCall(string name, Expr_ValueList args, int line)
 		{
 			int c = args.ValueList.Count;
 			ASMSnippet asm = ASMSnippet.FromEmpty();
@@ -185,31 +241,36 @@ namespace R2Script.Translation
 				asm.Instructions.Add(
 					GenerateExpressionToPush(args.ValueList[i]));
 			}
-			if (Function.Ar gs.Contains(name))//local
-				asm.Instructions.Add(
-					ASMSnippet.FromCode(
-						new ASMCode[] {
-							(ASMInstruction)$"call [bp{GetLocalOffset(name)}]"
-						}));
-			else if (Translator.GlobalNameManager.GlobalNames.Contains(name))
+			if (Translator.GlobalNameManager.GlobalNames.Contains(name))
 				asm.Instructions.Add((ASMInstruction)$"call {GlobalNameManager.GetGlobalName(name)}");
-			asm.Instructions.Add((ASMInstruction)$"add sp,{c}");
+			else
+				throw new TranslationException($"Unknown global(function):'{name}'", line);
+			if (c > 0)
+				asm.Instructions.Add((ASMInstruction)$"add sp,{c}");
 			return asm;
 		}
 		private ASMCode GenerateExpressionToPush(Expression e)
 		{
 			if (e is Expr_Variable ev)
 			{
-				return ASMSnippet.FromCode(
-					new ASMCode[] {
-						(ASMInstruction)$"push [bp{GetLocalOffset(ev.Name)}]",
-				});
+				if (SearchOffset(ev.Name, out int off))
+					return ASMSnippet.FromCode(
+						new ASMCode[] {
+							(ASMInstruction)$"push [bp{GetLocalOffset(off)}]",
+					});
+				else if (Translator.GlobalNameManager.GlobalNames.Contains(ev.Name))
+					return ASMSnippet.FromCode(
+						new ASMCode[] {
+							(ASMInstruction)$"push [{GlobalNameManager.GetGlobalName(ev.Name)}]",
+					});
+				else
+					throw new TranslationException("Unknown global or local", ev.Line);
 			}
 			else if (e is Expr_Call ec)
 			{
 				return ASMSnippet.FromCode(
 					new ASMCode[] {
-						GenerateCall(ec.Name,ec.Arguments),
+						GenerateCall(ec.Name,ec.Arguments,ec.Line),
 						(ASMInstruction)$"push r0",
 				});
 			}
@@ -261,22 +322,62 @@ namespace R2Script.Translation
 					   });
 				}
 			}
+			else if (e is Expr_Ref er)
+			{
+				if (er.Type == Expr_Ref.RefType.Address)
+				{
+					if (!(er.Value is Expr_Variable))
+						throw new TranslationException("Only local or global can be applied '&'", er.Line);
+					var ev4 = er.Value as Expr_Variable;
+					if (SearchOffset(ev4.Name, out int off))
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"mov r0,bp",
+								(ASMInstruction)$"add r0,{GetLocalOffset(off)}",
+								(ASMInstruction)$"push r0",
+					});
+					else if (Translator.GlobalNameManager.GlobalNames.Contains(ev4.Name))
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"push {GlobalNameManager.GetGlobalName(ev4.Name)}",
+						});
+					else
+						throw new TranslationException("Unknown global or local", ev4.Line);
+				}
+				else
+				{
+					return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToReg(er.Value,"r0"),
+								(ASMInstruction)$"mov r0,[r0]",
+								(ASMInstruction)$"push r0",
+						});
+				}
+			}
 			throw new TranslationException("Unexpected expression", e.Line);
 		}
 		private ASMCode GenerateExpressionToReg(Expression e, string targetReg)
 		{
 			if (e is Expr_Variable ev)
 			{
-				return ASMSnippet.FromCode(
-					new ASMCode[] {
-						(ASMInstruction)$"mov {targetReg},[bp{GetLocalOffset(ev.Name)}]",
+				if (SearchOffset(ev.Name, out int off))
+					return ASMSnippet.FromCode(
+						new ASMCode[] {
+							(ASMInstruction)$"mov {targetReg},[bp{GetLocalOffset(off)}]",
 				});
+				else if (Translator.GlobalNameManager.GlobalNames.Contains(ev.Name))
+					return ASMSnippet.FromCode(
+						new ASMCode[] {
+							(ASMInstruction)$"mov {targetReg},[{GlobalNameManager.GetGlobalName(ev.Name)}]",
+					});
+				else
+					throw new TranslationException("Unknown global or local", ev.Line);
 			}
 			else if (e is Expr_Call ec)
 			{
 				return ASMSnippet.FromCode(
 					new ASMCode[] {
-						GenerateCall(ec.Name,ec.Arguments),
+						GenerateCall(ec.Name,ec.Arguments,ec.Line),
 						(ASMInstruction)$"mov {targetReg},r0",
 				});
 			}
@@ -328,23 +429,62 @@ namespace R2Script.Translation
 					   });
 				}
 			}
+			else if (e is Expr_Ref er)
+			{
+				if (er.Type == Expr_Ref.RefType.Address)
+				{
+					if (!(er.Value is Expr_Variable))
+						throw new TranslationException("Only local or global can be applied '&'", er.Line);
+					var ev4 = er.Value as Expr_Variable;
+					if (SearchOffset(ev4.Name, out int off))
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"mov {targetReg},bp",
+								(ASMInstruction)$"add {targetReg},{GetLocalOffset(off)}",
+					});
+					else if (Translator.GlobalNameManager.GlobalNames.Contains(ev4.Name))
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"mov {targetReg},{GlobalNameManager.GetGlobalName(ev4.Name)}",
+						});
+					else
+						throw new TranslationException("Unknown global or local", ev4.Line);
+				}
+				else
+				{
+					return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToReg(er.Value,targetReg),
+								(ASMInstruction)$"mov {targetReg},[{targetReg}]",
+						});
+				}
+			}
 			throw new TranslationException("Unexpected expression", e.Line);
 		}
 		private ASMCode GenerateExpressionToMem(Expression e, string targetMem)
 		{
 			if (e is Expr_Variable ev)
 			{
-				return ASMSnippet.FromCode(
-					new ASMCode[] {
-						(ASMInstruction)$"mov r0,[bp{GetLocalOffset(ev.Name)}]",
-						(ASMInstruction)$"mov {targetMem},r0",
+				if (SearchOffset(ev.Name, out int off))
+					return ASMSnippet.FromCode(
+						new ASMCode[] {
+							(ASMInstruction)$"mov r0,[bp{GetLocalOffset(off)}]",
+							(ASMInstruction)$"mov {targetMem},r0",
 				});
+				else if (Translator.GlobalNameManager.GlobalNames.Contains(ev.Name))
+					return ASMSnippet.FromCode(
+						new ASMCode[] {
+							(ASMInstruction)$"mov r0,[{GlobalNameManager.GetGlobalName(ev.Name)}]",
+							(ASMInstruction)$"mov {targetMem},r0",
+					});
+				else
+					throw new TranslationException("Unknown global or local", ev.Line);
 			}
 			else if (e is Expr_Call ec)
 			{
 				return ASMSnippet.FromCode(
 					new ASMCode[] {
-						GenerateCall(ec.Name,ec.Arguments),
+						GenerateCall(ec.Name,ec.Arguments,ec.Line),
 						(ASMInstruction)$"mov {targetMem},r0",
 				});
 			}
@@ -396,6 +536,38 @@ namespace R2Script.Translation
 					   });
 				}
 			}
+			else if (e is Expr_Ref er)
+			{
+				if (er.Type == Expr_Ref.RefType.Address)
+				{
+					if (!(er.Value is Expr_Variable))
+						throw new TranslationException("Only local or global can be applied '&'", er.Line);
+					var ev4 = er.Value as Expr_Variable;
+					if (SearchOffset(ev4.Name, out int off))
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"mov r0,bp",
+								(ASMInstruction)$"add r0,{GetLocalOffset(off)}",
+								(ASMInstruction)$"mov {targetMem},r0",
+					});
+					else if (Translator.GlobalNameManager.GlobalNames.Contains(ev4.Name))
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"mov {targetMem},{GlobalNameManager.GetGlobalName(ev4.Name)}",
+						});
+					else
+						throw new TranslationException("Unknown global or local", ev4.Line);
+				}
+				else
+				{
+					return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToReg(er.Value,"r0"),
+								(ASMInstruction)$"mov r0,[r0]",
+								(ASMInstruction)$"mov {targetMem},r0",
+						});
+				}
+			}
 			throw new TranslationException("Unexpected expression", e.Line);
 		}
 
@@ -405,7 +577,7 @@ namespace R2Script.Translation
 		/// </summary>
 		/// <param name="b"></param>
 		/// <returns></returns>
-		public ASMCode GenerateBinaryExpression(Expr_Binary b)
+		private ASMCode GenerateBinaryExpression(Expr_Binary b)
 		{
 			string opCode = null;
 			switch (b.Operator)
@@ -419,6 +591,8 @@ namespace R2Script.Translation
 				default:
 					throw new TranslationException($"Unexpected operator:'{b.Operator}'", b.Line);
 			}
+
+
 			return ASMSnippet.FromCode(
 				new ASMCode[] {
 							GenerateExpressionToPush(b.Left),

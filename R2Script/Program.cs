@@ -25,10 +25,9 @@ namespace R2Script
 			Parser ps = new Parser(code);
 			var s = ps.Parse();
 			Translator t = Translator.Create(s);
-			FunctionFactory ff = FunctionFactory.FromFunction(t, (Stmt_Function)s.Statements[0]);
-			//Console.WriteLine(ff.OffsetTables.ElementAt(0).Value.Offsets["j"]);
-			//Console.WriteLine(ff.GenerateCode().GetCode());
-			Console.WriteLine(ff.MaxStack);
+			string c = t.Compile();
+			Console.WriteLine(c);
+			File.WriteAllText("./test.asm", c);
 		}
 	}
 }

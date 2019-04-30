@@ -46,6 +46,7 @@
     <Compile Include="Parse\AST\Expression.cs" />
     <Compile Include="Parse\AST\Expr_Binary.cs" />
     <Compile Include="Parse\AST\Expr_Call.cs" />
+    <Compile Include="Parse\AST\Expr_Ref.cs" />
     <Compile Include="Parse\AST\Expr_Value.cs" />
     <Compile Include="Parse\AST\Expr_ValueList.cs" />
     <Compile Include="Parse\AST\Expr_Variable.cs" />

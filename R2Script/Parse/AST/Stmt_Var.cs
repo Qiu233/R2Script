@@ -21,6 +21,18 @@ namespace R2Script.Parse.AST
 			{
 			}
 		}
+		/// <summary>
+		/// InitialValue -> Length
+		/// </summary>
+		public class VariableArray : Variable
+		{
+			public VariableArray(string name, Expression len) : base(name, len)
+			{
+			}
+			public VariableArray() : base()
+			{
+			}
+		}
 		public List<Variable> Variables;
 
 		public Stmt_Var(int line) : base(line)
