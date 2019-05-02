@@ -10,7 +10,7 @@ namespace R2Script.Parse.AST
 		public string Name;
 		public Expression Value;
 
-		public Stmt_Assign(int line) : base(line)
+		public Stmt_Assign(int line, string file) : base(line, file)
 		{
 		}
 	}

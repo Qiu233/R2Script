@@ -9,7 +9,7 @@ namespace R2Script.Parse.AST
 	{
 		public string Value;
 
-		public Expr_Value(int line) : base(line)
+		public Expr_Value(int line, string file) : base(line, file)
 		{
 		}
 	}

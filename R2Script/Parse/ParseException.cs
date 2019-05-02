@@ -7,8 +7,8 @@ namespace R2Script.Parse
 {
 	public class ParseException : Exception
 	{
-		public ParseException(string m, int line)
-			: base($"({line}): " + m)
+		public ParseException(string m, int line, string file)
+			: base($"[{file}]({line}): " + m)
 		{
 
 		}

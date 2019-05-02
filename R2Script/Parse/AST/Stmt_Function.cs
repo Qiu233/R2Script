@@ -12,7 +12,7 @@ namespace R2Script.Parse.AST
 		public List<string> Args;
 		public Stmt_Block Body;
 
-		public Stmt_Function(int line) : base(line)
+		public Stmt_Function(int line, string file) : base(line, file)
 		{
 		}
 	}

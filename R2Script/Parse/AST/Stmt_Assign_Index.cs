@@ -8,7 +8,7 @@ namespace R2Script.Parse.AST
 	public class Stmt_Assign_Index : Stmt_Assign
 	{
 		public Expression Index;
-		public Stmt_Assign_Index(int line) : base(line)
+		public Stmt_Assign_Index(int line, string file) : base(line, file)
 		{
 		}
 	}

@@ -9,7 +9,7 @@ namespace R2Script.Parse.AST
 	{
 		public List<Expression> ValueList = new List<Expression>();
 
-		public Expr_ValueList(int line) : base(line)
+		public Expr_ValueList(int line, string file) : base(line, file)
 		{
 		}
 	}

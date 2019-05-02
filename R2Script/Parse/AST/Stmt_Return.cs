@@ -9,7 +9,7 @@ namespace R2Script.Parse.AST
 	{
 		public Expression Value;
 
-		public Stmt_Return(int line) : base(line)
+		public Stmt_Return(int line, string file) : base(line, file)
 		{
 		}
 	}

@@ -10,7 +10,7 @@ namespace R2Script.Parse.AST
 		public Expression Left, Right;
 		public string Operator;
 
-		public Expr_Binary(int line) : base(line)
+		public Expr_Binary(int line, string file) : base(line, file)
 		{
 		}
 
@@ -25,19 +25,19 @@ namespace R2Script.Parse.AST
 			switch (Operator)
 			{
 				case "+":
-					return new Expr_Value(Line)
+					return new Expr_Value(Line, File)
 					{
 						Value = (Convert.ToInt64((Left as Expr_Value).Value) +
 						Convert.ToInt64((Right as Expr_Value).Value)).ToString()
 					};
 				case "-":
-					return new Expr_Value(Line)
+					return new Expr_Value(Line, File)
 					{
 						Value = (Convert.ToInt64((Left as Expr_Value).Value) -
 						Convert.ToInt64((Right as Expr_Value).Value)).ToString()
 					};
 				case "*":
-					return new Expr_Value(Line)
+					return new Expr_Value(Line, File)
 					{
 						Value = (Convert.ToInt64((Left as Expr_Value).Value) *
 						Convert.ToInt64((Right as Expr_Value).Value)).ToString()

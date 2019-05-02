@@ -7,7 +7,7 @@ namespace R2Script.Parse.AST
 {
 	public abstract class Stmt_PreCompile : Statement
 	{
-		public Stmt_PreCompile(int line) : base(line)
+		public Stmt_PreCompile(int line, string file) : base(line, file)
 		{
 		}
 	}

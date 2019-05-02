@@ -13,7 +13,7 @@ namespace R2Script.Parse.AST
 		}
 		public Expression Value;
 		public RefType Type;
-		public Expr_Ref(int line) : base(line)
+		public Expr_Ref(int line, string file) : base(line, file)
 		{
 		}
 	}

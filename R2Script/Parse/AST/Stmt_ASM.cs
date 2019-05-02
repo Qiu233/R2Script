@@ -8,7 +8,7 @@ namespace R2Script.Parse.AST
 	public class Stmt_ASM : Statement
 	{
 		public string ASM;
-		public Stmt_ASM(int line) : base(line)
+		public Stmt_ASM(int line, string file) : base(line, file)
 		{
 		}
 	}

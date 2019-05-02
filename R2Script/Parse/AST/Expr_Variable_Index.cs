@@ -8,7 +8,7 @@ namespace R2Script.Parse.AST
 	public class Expr_Variable_Index : Expr_Variable
 	{
 		public Expression Index;
-		public Expr_Variable_Index(int line) : base(line)
+		public Expr_Variable_Index(int line, string file) : base(line, file)
 		{
 		}
 	}

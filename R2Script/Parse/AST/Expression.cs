@@ -12,9 +12,15 @@ namespace R2Script.Parse.AST
 			get;
 			set;
 		}
-		public Expression(int line)
+		public string File
+		{
+			get;
+			set;
+		}
+		public Expression(int line,string file)
 		{
 			this.Line = line;
+			this.File = file;
 		}
 	}
 }

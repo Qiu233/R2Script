@@ -35,7 +35,7 @@ namespace R2Script.Parse.AST
 		}
 		public List<Variable> Variables;
 
-		public Stmt_Var(int line) : base(line)
+		public Stmt_Var(int line, string file) : base(line, file)
 		{
 		}
 	}

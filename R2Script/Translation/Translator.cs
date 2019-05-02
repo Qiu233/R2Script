@@ -72,22 +72,22 @@ namespace R2Script.Translation
 			{
 				if (r is Stmt_Import si)
 				{
-					if (File.Exists(si.File))
-						ImportedASM.Add(new KeyValuePair<string, string>(si.File, File.ReadAllText(si.File)));
+					if (File.Exists(si.TargetFile))
+						ImportedASM.Add(new KeyValuePair<string, string>(si.TargetFile, File.ReadAllText(si.TargetFile)));
 					else
-						throw new TranslationException("No such file", si.Line);
+						throw new TranslationException($"No such file:'{si.TargetFile}'", si.Line, si.TargetFile);
 				}
 				else if (r is Stmt_Include sinc)
 				{
-					if (File.Exists(sinc.File))
+					if (File.Exists(sinc.TargetFile))
 					{
-						Parser p = new Parser(File.ReadAllText(sinc.File));
+						Parser p = new Parser(File.ReadAllText(sinc.TargetFile), sinc.TargetFile);
 						var block = p.Parse();
 						Code.Add(block);
 						PreCompile(block);
 					}
 					else
-						throw new TranslationException("No such file", sinc.Line);
+						throw new TranslationException($"No such file:'{sinc.TargetFile}'", sinc.Line, sinc.TargetFile);
 				}
 			}
 		}
@@ -99,16 +99,16 @@ namespace R2Script.Translation
 				foreach (var r in t.Statements)
 				{
 					if (!(r is Stmt_Var) && !(r is Stmt_Function) && !(r is Stmt_PreCompile))
-						throw new TranslationException("Unexpected statements", r.Line);
+						throw new TranslationException("Unexpected statements", r.Line, r.File);
 					if (r is Stmt_Var sv)
 						foreach (var va in sv.Variables)
 							if (!GlobalNameManager.GlobalNames.Contains(va.Name))
 								GlobalNameManager.Add(va.Name);
-							else throw new TranslationException("Global duplicated", sv.Line);
+							else throw new TranslationException("Global duplicated", sv.Line, r.File);
 					else if (r is Stmt_Function sf)
 						if (!GlobalNameManager.GlobalNames.Contains(sf.Name))
 							GlobalNameManager.Add(sf.Name);
-						else throw new TranslationException("Global duplicated", sf.Line);
+						else throw new TranslationException("Global duplicated", sf.Line, r.File);
 				}
 			}
 		}
@@ -183,7 +183,7 @@ namespace R2Script.Translation
 					if (b is Expr_Value ev1)
 						sb.Append($"dw {ev1.Value}\n");
 					else
-						throw new TranslationException("Variable should be initialized as constants", v.Value.Line);
+						throw new TranslationException("Variable should be initialized as constants", v.Value.Line, v.Value.File);
 				}
 				else if (v.Key.InitialValue is Expr_ValueList evl)
 				{
@@ -196,7 +196,7 @@ namespace R2Script.Translation
 						else if (ex is Expr_Binary && (ex as Expr_Binary).TryContract() is Expr_Value ev3)
 							tt.Add(ev3.Value);
 						else
-							throw new TranslationException("Variable should be initialized as constants", v.Value.Line);
+							throw new TranslationException("Variable should be initialized as constants", v.Value.Line, v.Value.File);
 					}
 					var ttt = tt.ToArray();
 					int i = 0;
@@ -214,7 +214,7 @@ namespace R2Script.Translation
 						}
 					}
 				}
-				else throw new TranslationException("Variable should be initialized as constants", v.Value.Line);
+				else throw new TranslationException("Variable should be initialized as constants", v.Value.Line, v.Value.File);
 			}
 			return sb.ToString();
 		}
@@ -232,7 +232,7 @@ namespace R2Script.Translation
 		public string Compile()
 		{
 			if (!GlobalNameManager.GlobalNames.Contains("main"))
-				throw new TranslationException("Function 'main' is not defined", 0);
+				throw new TranslationException("Function 'main' is not defined", 0, "");
 			string asms = CompileASMs();
 			string function = CompileFunctions();
 			string data = CompileData();

@@ -7,7 +7,7 @@ namespace R2Script.Parse.AST
 {
 	public class Stmt_Continue : Statement
 	{
-		public Stmt_Continue(int line) : base(line)
+		public Stmt_Continue(int line, string file) : base(line, file)
 		{
 		}
 	}

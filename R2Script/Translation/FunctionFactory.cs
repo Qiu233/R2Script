@@ -106,13 +106,13 @@ namespace R2Script.Translation
 		public static FunctionFactory FromFunction(Translator translator, Stmt_Function func)
 		{
 			var n = new FunctionFactory(translator, func);
-			CheckLocals(func.Body.SymbolTable, new List<string>());
+			n.CheckLocals(func.Body.SymbolTable, new List<string>());
 			n.MapArgs();
 			n.ASMCode = n.GenerateCode();
 			return n;
 		}
 
-		private static void CheckLocals(SymbolTable tab, List<string> names)
+		private void CheckLocals(SymbolTable tab, List<string> names)
 		{
 			tab.Symbols.ForEach(t =>
 			{
@@ -120,7 +120,7 @@ namespace R2Script.Translation
 				{
 					var si = t as SymbolIden;
 					if (names.Contains(si.Name))
-						throw new TranslationException("Local duplicated:'" + si.Name + "'", si.Line);
+						throw new TranslationException("Local duplicated:'" + si.Name + "'", si.Line, Function.File);
 					names.Add(si.Name);
 				}
 				else
@@ -203,7 +203,7 @@ namespace R2Script.Translation
 				foreach (var stmt in Function.Body.Statements)
 				{
 					if (!(stmt is Stmt_ASM))
-						throw new TranslationException("Only native ASMs is allowed to be in a naked function", stmt.Line);
+						throw new TranslationException("Only native ASMs is allowed to be in a naked function", stmt.Line, stmt.File);
 					var sa = stmt as Stmt_ASM;
 					e.Content.Add((ASMInstruction)(sa.ASM + "\n"));
 				}
@@ -247,7 +247,7 @@ namespace R2Script.Translation
 						{
 							Expression ex = null;
 							if (!((ex = eb.TryContract()) is Expr_Value))
-								throw new TranslationException("Array's length should be a constant", eb.Line);
+								throw new TranslationException("Array's length should be a constant", eb.Line, eb.File);
 							len = Convert.ToInt32((ex as Expr_Value).Value);
 						}
 						else if (vv.InitialValue is Expr_Value ev)
@@ -255,9 +255,9 @@ namespace R2Script.Translation
 							len = Convert.ToInt32(ev.Value);
 						}
 						else
-							throw new TranslationException("Array's length should be a constant", v.Line);
+							throw new TranslationException("Array's length should be a constant", v.Line, v.File);
 						if (len <= 0)
-							throw new TranslationException("Array's length should not be lower or equal to 0", v.Line);
+							throw new TranslationException("Array's length should not be lower or equal to 0", v.Line, v.File);
 						StackUse += len + 1;
 						_maxStack = Math.Max(_maxStack, StackUse);
 
@@ -287,7 +287,7 @@ namespace R2Script.Translation
 				bool b = SearchOffset(sa.Name, out int off);
 				if (!b &&
 					!Translator.GlobalNameManager.GlobalNames.Contains(sa.Name))
-					throw new TranslationException($"Unknown global or local:'{sa.Name}'", sa.Line);
+					throw new TranslationException($"Unknown global or local:'{sa.Name}'", sa.Line, sa.File);
 				if (b)
 				{
 					if (!(sa is Stmt_Assign_Index))
@@ -392,7 +392,7 @@ namespace R2Script.Translation
 
 				return asm;
 			}
-			throw new TranslationException("Unexpected statement", stmt.Line);
+			throw new TranslationException("Unexpected statement", stmt.Line, stmt.File);
 		}
 		private ASMCode GenerateCall(string name, Expr_ValueList args, int line)
 		{
@@ -443,7 +443,7 @@ namespace R2Script.Translation
 							});
 				}
 				else
-					throw new TranslationException("Unknown global or local", ev.Line);
+					throw new TranslationException("Unknown global or local", ev.Line, ev.File);
 			}
 			else if (e is Expr_Call ec)
 			{
@@ -476,7 +476,7 @@ namespace R2Script.Translation
 			else if (e is Expr_ValueList evl)
 			{
 				if (!evl.ValueList.TrueForAll(t => t is Expr_Value))
-					throw new TranslationException("Array can only contain constants", evl.Line);
+					throw new TranslationException("Array can only contain constants", evl.Line, evl.File);
 				int n = Translator.ConstantManager.AddArray(
 					evl.ValueList.Select(t => (t as Expr_Value).Value).ToList());
 
@@ -506,7 +506,7 @@ namespace R2Script.Translation
 				if (er.Type == Expr_Ref.RefType.Address)
 				{
 					if (!(er.Value is Expr_Variable))
-						throw new TranslationException("Only local or global can be applied '&'", er.Line);
+						throw new TranslationException("Only local or global can be applied '&'", er.Line, er.File);
 					var ev4 = er.Value as Expr_Variable;
 					if (SearchOffset(ev4.Name, out int off))
 						return ASMSnippet.FromCode(
@@ -521,7 +521,7 @@ namespace R2Script.Translation
 								(ASMInstruction)$"push {GlobalNameManager.GetGlobalName(ev4.Name)}",
 						});
 					else
-						throw new TranslationException("Unknown global or local", ev4.Line);
+						throw new TranslationException("Unknown global or local", ev4.Line, ev4.File);
 				}
 				else
 				{
@@ -533,7 +533,7 @@ namespace R2Script.Translation
 						});
 				}
 			}
-			throw new TranslationException("Unexpected expression", e.Line);
+			throw new TranslationException("Unexpected expression", e.Line, e.File);
 		}
 		private ASMCode GenerateExpressionToReg(Expression e, string targetReg)
 		{
@@ -570,7 +570,7 @@ namespace R2Script.Translation
 							});
 				}
 				else
-					throw new TranslationException("Unknown global or local", ev.Line);
+					throw new TranslationException("Unknown global or local", ev.Line, ev.File);
 			}
 			else if (e is Expr_Call ec)
 			{
@@ -603,7 +603,7 @@ namespace R2Script.Translation
 			else if (e is Expr_ValueList evl)
 			{
 				if (!evl.ValueList.TrueForAll(t => t is Expr_Value))
-					throw new TranslationException("Array can only contain constants", evl.Line);
+					throw new TranslationException("Array can only contain constants", evl.Line, evl.File);
 				int n = Translator.ConstantManager.AddArray(
 					evl.ValueList.Select(t => (t as Expr_Value).Value).ToList());
 
@@ -633,7 +633,7 @@ namespace R2Script.Translation
 				if (er.Type == Expr_Ref.RefType.Address)
 				{
 					if (!(er.Value is Expr_Variable))
-						throw new TranslationException("Only local or global can be applied '&'", er.Line);
+						throw new TranslationException("Only local or global can be applied '&'", er.Line, er.File);
 					var ev4 = er.Value as Expr_Variable;
 					if (SearchOffset(ev4.Name, out int off))
 						return ASMSnippet.FromCode(
@@ -647,7 +647,7 @@ namespace R2Script.Translation
 								(ASMInstruction)$"mov {targetReg},{GlobalNameManager.GetGlobalName(ev4.Name)}",
 						});
 					else
-						throw new TranslationException("Unknown global or local", ev4.Line);
+						throw new TranslationException("Unknown global or local", ev4.Line, ev4.File);
 				}
 				else
 				{
@@ -658,7 +658,7 @@ namespace R2Script.Translation
 						});
 				}
 			}
-			throw new TranslationException("Unexpected expression", e.Line);
+			throw new TranslationException("Unexpected expression", e.Line, e.File);
 		}
 		private ASMCode GenerateExpressionToMem(Expression e, string targetMem)
 		{
@@ -699,7 +699,7 @@ namespace R2Script.Translation
 					});
 				}
 				else
-					throw new TranslationException("Unknown global or local", ev.Line);
+					throw new TranslationException("Unknown global or local", ev.Line, ev.File);
 			}
 			else if (e is Expr_Call ec)
 			{
@@ -734,7 +734,7 @@ namespace R2Script.Translation
 			else if (e is Expr_ValueList evl)
 			{
 				if (!evl.ValueList.TrueForAll(t => t is Expr_Value))
-					throw new TranslationException("Array can only contain constants", evl.Line);
+					throw new TranslationException("Array can only contain constants", evl.Line, evl.File);
 				int n = Translator.ConstantManager.AddArray(
 					evl.ValueList.Select(t => (t as Expr_Value).Value).ToList());
 
@@ -765,7 +765,7 @@ namespace R2Script.Translation
 				if (er.Type == Expr_Ref.RefType.Address)
 				{
 					if (!(er.Value is Expr_Variable))
-						throw new TranslationException("Only local or global can be applied '&'", er.Line);
+						throw new TranslationException("Only local or global can be applied '&'", er.Line, er.File);
 					var ev4 = er.Value as Expr_Variable;
 					if (SearchOffset(ev4.Name, out int off))
 						return ASMSnippet.FromCode(
@@ -780,7 +780,7 @@ namespace R2Script.Translation
 								(ASMInstruction)$"mov {targetMem},{GlobalNameManager.GetGlobalName(ev4.Name)}",
 						});
 					else
-						throw new TranslationException("Unknown global or local", ev4.Line);
+						throw new TranslationException("Unknown global or local", ev4.Line, ev4.File);
 				}
 				else
 				{
@@ -792,7 +792,7 @@ namespace R2Script.Translation
 						});
 				}
 			}
-			throw new TranslationException("Unexpected expression", e.Line);
+			throw new TranslationException("Unexpected expression", e.Line, e.File);
 		}
 
 
@@ -940,7 +940,7 @@ namespace R2Script.Translation
 						break;
 					}
 				default:
-					throw new TranslationException($"Unexpected operator:'{b.Operator}'", b.Line);
+					throw new TranslationException($"Unexpected operator:'{b.Operator}'", b.Line, b.File);
 			}
 			return asm;
 		}

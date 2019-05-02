@@ -7,8 +7,8 @@ namespace R2Script.Parse.AST
 {
 	public class Stmt_Import : Stmt_PreCompile
 	{
-		public string File;
-		public Stmt_Import(int line) : base(line)
+		public string TargetFile;
+		public Stmt_Import(int line, string file) : base(line, file)
 		{
 		}
 	}

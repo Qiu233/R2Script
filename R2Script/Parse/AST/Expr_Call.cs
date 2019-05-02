@@ -10,7 +10,7 @@ namespace R2Script.Parse.AST
 		public string Name;
 		public Expr_ValueList Arguments;
 
-		public Expr_Call(int line) : base(line)
+		public Expr_Call(int line, string file) : base(line, file)
 		{
 		}
 	}

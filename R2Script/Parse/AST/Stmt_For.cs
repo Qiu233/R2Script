@@ -12,7 +12,7 @@ namespace R2Script.Parse.AST
 		public Statement Iteration;
 		public Statement Body;
 
-		public Stmt_For(int line) : base(line)
+		public Stmt_For(int line, string file) : base(line, file)
 		{
 		}
 	}

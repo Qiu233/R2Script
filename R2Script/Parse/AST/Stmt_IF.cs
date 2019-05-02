@@ -20,7 +20,7 @@ namespace R2Script.Parse.AST
 		public List<IFStructure> IF;
 		public Statement Else;
 
-		public Stmt_IF(int line) : base(line)
+		public Stmt_IF(int line, string file) : base(line, file)
 		{
 		}
 	}

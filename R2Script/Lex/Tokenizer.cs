@@ -20,6 +20,10 @@ namespace R2Script.Lex
 			get;
 			private set;
 		}
+		public string File
+		{
+			get;
+		}
 		private char ch;
 		private Token token;
 		public const int ERR_LEX_INVALID_CHARACTER = -1;
@@ -29,11 +33,12 @@ namespace R2Script.Lex
 		{
 			return token;
 		}
-		public Tokenizer(string code)
+		public Tokenizer(string code, string file)
 		{
 			this.Code = code;
 			this.Index = 0;
 			this.Line = 1;
+			this.File = file;
 			Nextc();
 		}
 		private void Nextc()
@@ -78,6 +83,7 @@ namespace R2Script.Lex
 		public int Next()
 		{
 			token = new Token();
+			token.File = File;
 			#region 处理空白符，Token开头
 			{
 				bool flag = true;
@@ -142,7 +148,7 @@ namespace R2Script.Lex
 										token.Type = TokenType.TK_PRECOMP_INCLUDE;
 										break;
 									default:
-										throw new LexException("Unsupported pre-compile label", Line);
+										throw new LexException("Unsupported pre-compile label", Line, File);
 								}
 								return 0;
 							}
@@ -347,7 +353,7 @@ namespace R2Script.Lex
 								}
 								return 0;
 							}
-							throw new LexException("Invalid character", Line);
+							throw new LexException("Invalid character", Line, File);
 					}
 				}
 			}

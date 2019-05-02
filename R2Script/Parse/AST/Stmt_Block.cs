@@ -10,7 +10,7 @@ namespace R2Script.Parse.AST
 		public List<Statement> Statements;
 		public SymbolTable SymbolTable;
 
-		public Stmt_Block(int line) : base(line)
+		public Stmt_Block(int line, string file) : base(line, file)
 		{
 		}
 	}

@@ -7,8 +7,8 @@ namespace R2Script.Translation
 {
 	public class TranslationException : Exception
 	{
-		public TranslationException(string m, int line)
-			: base($"({line}): " + m)
+		public TranslationException(string m, int line, string file)
+			: base($"[{file}]({line}): " + m)
 		{
 
 		}

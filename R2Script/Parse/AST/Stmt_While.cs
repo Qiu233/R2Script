@@ -10,7 +10,7 @@ namespace R2Script.Parse.AST
 		public Expression Condition;
 		public Statement Body;
 
-		public Stmt_While(int line) : base(line)
+		public Stmt_While(int line, string file) : base(line, file)
 		{
 		}
 	}

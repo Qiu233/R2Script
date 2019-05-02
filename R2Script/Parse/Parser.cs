@@ -26,11 +26,11 @@ namespace R2Script.Parse
 		{
 			get;
 		}
-		public Parser(string code, string file = null)
+		public Parser(string code, string file)
 		{
 			this.SymbolTables = new Stack<SymbolTable>();
 			this.Code = code;
-			this.Tokenizer = new Tokenizer(code);
+			this.Tokenizer = new Tokenizer(code, file);
 			this.File = file;
 			this.RootSymbolTable = new SymbolTable(0);
 			SymbolTables.Push(RootSymbolTable);//root
@@ -59,8 +59,8 @@ namespace R2Script.Parse
 			else
 			{
 				if ((int)type > 127)
-					throw new ParseException("Faild to match token:" + type, Token.Line);
-				else throw new ParseException("Faild to match token:'" + (char)type + "'", Token.Line);
+					throw new ParseException("Faild to match token:" + type, Token.Line, Token.File);
+				else throw new ParseException("Faild to match token:'" + (char)type + "'", Token.Line, Token.File);
 			}
 		}
 		private void Accept(int type)
@@ -77,7 +77,7 @@ namespace R2Script.Parse
 			if (Match(TokenType.TK_NAME))
 				Accept();
 			else
-				throw new ParseException("Faild to match a NAME", Token.Line);
+				throw new ParseException("Faild to match a NAME", Token.Line, Token.File);
 			return o;
 		}
 		private void AcceptLineEnd(bool force = true)
@@ -87,7 +87,7 @@ namespace R2Script.Parse
 			else
 			{
 				if (!force) return;
-				throw new ParseException("Maybe ';' is missing", Token.Line);
+				throw new ParseException("Maybe ';' is missing", Token.Line, Token.File);
 			}
 		}
 		private void AddSymbol(string s, int line)
@@ -100,13 +100,13 @@ namespace R2Script.Parse
 			NextToken();
 			var v = GetStatementBlock();
 			if (Token.Type > 0)
-				throw new ParseException("Surplus of tokens", Token.Line);
+				throw new ParseException("Surplus of tokens", Token.Line, Token.File);
 			return v;
 		}
 
 		public Stmt_Block GetStatementBlock()
 		{
-			Stmt_Block block = new Stmt_Block(Line);
+			Stmt_Block block = new Stmt_Block(Line, File);
 			block.SymbolTable = new SymbolTable(Line);
 			block.Statements = new List<Statement>();
 			SymbolTables.Peek().Add(block.SymbolTable);
@@ -120,7 +120,7 @@ namespace R2Script.Parse
 
 		public Expr_ValueList GetValueArray()
 		{
-			Expr_ValueList vl = new Expr_ValueList(Line);
+			Expr_ValueList vl = new Expr_ValueList(Line, File);
 			Accept('[');
 			if (!Match(']'))
 				vl.ValueList.Add(E());
@@ -167,7 +167,7 @@ namespace R2Script.Parse
 				return null;
 			return GetVariableRaw();
 		}
-		
+
 		/// <summary>
 		/// 
 		/// </summary>
@@ -188,7 +188,7 @@ namespace R2Script.Parse
 			else if (Match(TokenType.TK_KW_VAR))
 			{
 				Accept();//var
-				Stmt_Var s = new Stmt_Var(Line);
+				Stmt_Var s = new Stmt_Var(Line, File);
 				s.Variables = new List<Stmt_Var.Variable>();
 
 				Stmt_Var.Variable vt = null;
@@ -205,7 +205,7 @@ namespace R2Script.Parse
 			#region function
 			else if (Match(TokenType.TK_KW_FUNCTION))
 			{
-				Stmt_Function func = new Stmt_Function(Line);
+				Stmt_Function func = new Stmt_Function(Line, File);
 				func.Args = new List<string>();
 				Accept();//function
 				if (Match(TokenType.TK_KW_NAKED))
@@ -238,7 +238,7 @@ namespace R2Script.Parse
 			#region if
 			else if (Match(TokenType.TK_KW_IF))
 			{
-				Stmt_IF si = new Stmt_IF(Line);
+				Stmt_IF si = new Stmt_IF(Line, File);
 				si.IF = new List<Stmt_IF.IFStructure>();
 				Accept();//if
 				Accept('(');
@@ -246,7 +246,7 @@ namespace R2Script.Parse
 				Accept(')');
 				Statement body = GetStatement();
 				si.IF.Add(new Stmt_IF.IFStructure(condition, body));
-				
+
 				while (Match(TokenType.TK_KW_ELSE))
 				{
 					Accept();//else
@@ -265,7 +265,7 @@ namespace R2Script.Parse
 						break;
 					}
 				}
-				
+
 
 				return si;
 			}
@@ -276,13 +276,13 @@ namespace R2Script.Parse
 				Accept();//return
 				Expression v = E();
 				AcceptLineEnd();
-				return new Stmt_Return(Line) { Value = v };
+				return new Stmt_Return(Line, File) { Value = v };
 			}
 			#endregion
 			#region while
 			else if (Match(TokenType.TK_KW_WHILE))
 			{
-				Stmt_While sw = new Stmt_While(Line);
+				Stmt_While sw = new Stmt_While(Line, File);
 				Accept();//while
 				Accept('(');
 				sw.Condition = E();
@@ -296,7 +296,7 @@ namespace R2Script.Parse
 			{
 				Accept();//break
 				AcceptLineEnd();
-				return new Stmt_Break(Line);
+				return new Stmt_Break(Line, File);
 			}
 			#endregion
 			#region continue
@@ -304,7 +304,7 @@ namespace R2Script.Parse
 			{
 				Accept();//continue
 				AcceptLineEnd();
-				return new Stmt_Continue(Line);
+				return new Stmt_Continue(Line, File);
 			}
 			#endregion
 			#region assign or call
@@ -316,7 +316,7 @@ namespace R2Script.Parse
 					Accept();//=
 					Expression e = E();
 					AcceptLineEnd();
-					return new Stmt_Assign(Line) { Name = name, Value = e };
+					return new Stmt_Assign(Line, File) { Name = name, Value = e };
 				}
 				else if (Match('['))
 				{
@@ -326,21 +326,21 @@ namespace R2Script.Parse
 					Accept('=');
 					Expression val = E();
 					AcceptLineEnd();
-					return new Stmt_Assign_Index(Line) { Name = name, Value = val, Index = index };
+					return new Stmt_Assign_Index(Line, File) { Name = name, Value = val, Index = index };
 				}
 				else if (Match('('))
 				{
 					var args = GetActualArguments();
 					AcceptLineEnd();
-					return new Stmt_Call(Line) { Name = name, Arguments = args };
+					return new Stmt_Call(Line, File) { Name = name, Arguments = args };
 				}
-				throw new ParseException("Unknown statement", Token.Line);
+				throw new ParseException("Unknown statement", Token.Line, Token.File);
 			}
 			#endregion
 			#region ASM
 			else if (Match(TokenType.TK_SEG_ASM))
 			{
-				var s = new Stmt_ASM(Line) { ASM = Token.Value };
+				var s = new Stmt_ASM(Line, File) { ASM = Token.Value };
 				Accept();//ASM
 				return s;
 			}
@@ -351,7 +351,7 @@ namespace R2Script.Parse
 				Accept();//@import
 				string value = Token.Value;
 				Accept(TokenType.TK_STRING);//value
-				var s = new Stmt_Import(Line) { File = value.Substring(1, value.Length - 2) };
+				var s = new Stmt_Import(Line, File) { TargetFile = value.Substring(1, value.Length - 2) };
 				return s;
 			}
 			else if (Match(TokenType.TK_PRECOMP_INCLUDE))
@@ -359,7 +359,7 @@ namespace R2Script.Parse
 				Accept();//@include
 				string value = Token.Value;
 				Accept(TokenType.TK_STRING);//value
-				var s = new Stmt_Include(Line) { File = value.Substring(1, value.Length - 2) };
+				var s = new Stmt_Include(Line, File) { TargetFile = value.Substring(1, value.Length - 2) };
 				return s;
 			}
 			#endregion
@@ -379,7 +379,7 @@ namespace R2Script.Parse
 			{
 				Token t = Token;
 				Accept();
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				Expression right = D();
 				eb.Operator = "&&";
 				eb.Left = left;
@@ -391,7 +391,7 @@ namespace R2Script.Parse
 			{
 				Token t = Token;
 				Accept();
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				Expression right = D();
 				eb.Operator = "||";
 				eb.Left = left;
@@ -415,7 +415,7 @@ namespace R2Script.Parse
 			{
 				Token t = Token;
 				Accept();
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				Expression right = R();
 				eb.Operator = "==";
 				eb.Left = left;
@@ -427,7 +427,7 @@ namespace R2Script.Parse
 			{
 				Token t = Token;
 				Accept();
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				Expression right = R();
 				eb.Operator = ">=";
 				eb.Left = left;
@@ -439,7 +439,7 @@ namespace R2Script.Parse
 			{
 				Token t = Token;
 				Accept();
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				Expression right = R();
 				eb.Operator = "<=";
 				eb.Left = left;
@@ -451,7 +451,7 @@ namespace R2Script.Parse
 			{
 				Token t = Token;
 				Accept();
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				Expression right = R();
 				eb.Operator = ">";
 				eb.Left = left;
@@ -463,7 +463,7 @@ namespace R2Script.Parse
 			{
 				Token t = Token;
 				Accept();
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				Expression right = R();
 				eb.Operator = "<";
 				eb.Left = left;
@@ -487,7 +487,7 @@ namespace R2Script.Parse
 			{
 				Token t = Token;
 				Accept();
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				Expression right = W();
 				eb.Operator = "+";
 				eb.Left = left;
@@ -499,7 +499,7 @@ namespace R2Script.Parse
 			{
 				Token t = Token;
 				Accept();
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				Expression right = W();
 				eb.Operator = "-";
 				eb.Left = left;
@@ -526,7 +526,7 @@ namespace R2Script.Parse
 			{
 				Token t = Token;
 				Accept();
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				Expression right = T();
 				eb.Operator = "|";
 				eb.Left = left;
@@ -538,7 +538,7 @@ namespace R2Script.Parse
 			{
 				Token t = Token;
 				Accept();
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				Expression right = T();
 				eb.Operator = "&";
 				eb.Left = left;
@@ -564,7 +564,7 @@ namespace R2Script.Parse
 			{
 				Token t = Token;
 				Accept();
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				Expression right = F();
 				eb.Operator = "*";
 				eb.Left = left;
@@ -576,7 +576,7 @@ namespace R2Script.Parse
 			{
 				Token t = Token;
 				Accept();
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				Expression right = F();
 				eb.Operator = "/";
 				eb.Left = left;
@@ -601,7 +601,7 @@ namespace R2Script.Parse
 			}
 			else if (Match(TokenType.TK_STRING))
 			{
-				var e = new Expr_Value(Line) { Value = Token.Value };
+				var e = new Expr_Value(Line, File) { Value = Token.Value };
 				Accept();
 				return e;
 			}
@@ -609,10 +609,10 @@ namespace R2Script.Parse
 			{
 				Accept();//-
 				Expression e = T();//lowest
-				Expr_Binary eb = new Expr_Binary(Line);
+				Expr_Binary eb = new Expr_Binary(Line, File);
 				eb.Operator = "*";
 				eb.Left = e;
-				Expr_Value ev = new Expr_Value(Line);
+				Expr_Value ev = new Expr_Value(Line, File);
 				ev.Value = "-1";
 				eb.Right = ev;
 				return eb;
@@ -620,7 +620,7 @@ namespace R2Script.Parse
 			else if (Match('*'))//value
 			{
 				Accept();//*
-				Expr_Ref r = new Expr_Ref(Line);
+				Expr_Ref r = new Expr_Ref(Line, File);
 				r.Value = E();
 				r.Type = Expr_Ref.RefType.Value;
 				return r;
@@ -628,14 +628,14 @@ namespace R2Script.Parse
 			else if (Match('&'))//address
 			{
 				Accept();//&
-				Expr_Ref r = new Expr_Ref(Line);
+				Expr_Ref r = new Expr_Ref(Line, File);
 				r.Value = E();
 				r.Type = Expr_Ref.RefType.Address;
 				return r;
 			}
 			else if (Match(TokenType.TK_NUMBER))
 			{
-				Expr_Value ev = new Expr_Value(Line);
+				Expr_Value ev = new Expr_Value(Line, File);
 				ev.Value = Token.Value;
 				Accept();
 				return ev;
@@ -649,7 +649,7 @@ namespace R2Script.Parse
 				}
 				else
 				{
-					Expr_Variable ev = new Expr_Variable(Line);
+					Expr_Variable ev = new Expr_Variable(Line, File);
 					ev.Name = name;
 					return ev;
 				}
@@ -658,7 +658,7 @@ namespace R2Script.Parse
 		}
 		private Expr_ValueList GetActualArguments()
 		{
-			Expr_ValueList vl = new Expr_ValueList(Line);
+			Expr_ValueList vl = new Expr_ValueList(Line, File);
 			vl.ValueList = new List<Expression>();
 			Accept('(');
 			if (!Match(')'))
@@ -675,7 +675,7 @@ namespace R2Script.Parse
 		}
 		private Expr_Call CallFunction(string name, Expr_ValueList arg)
 		{
-			return new Expr_Call(Line) { Name = name, Arguments = arg };
+			return new Expr_Call(Line, File) { Name = name, Arguments = arg };
 		}
 	}
 }

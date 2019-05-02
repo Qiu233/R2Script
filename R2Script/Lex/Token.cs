@@ -22,11 +22,17 @@ namespace R2Script.Lex
 			get;
 			set;
 		}
-		public Token(TokenType type, int line, string value = "")
+		public string File
+		{
+			get;
+			set;
+		}
+		public Token(TokenType type, int line, string file, string value = "")
 		{
 			this.Type = type;
 			this.Line = line;
 			this.Value = value;
+			this.File = file;
 		}
 	}
 }

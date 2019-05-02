@@ -1,4 +1,5 @@
-﻿using R2Script.Lex;
+﻿using CommandLine;
+using R2Script.Lex;
 using R2Script.Parse;
 using R2Script.Parse.AST;
 using R2Script.Translation;
@@ -14,21 +15,28 @@ namespace R2Script
 	{
 		static void Main(string[] args)
 		{
+			
+#if DEBUG
 			string code = File.ReadAllText("./test.rs");
-			/*Tokenizer t = new Tokenizer(code);
-			while (true)
-			{
-				if (t.Next() < 0) break;
-				var tk = t.Get();
-				Console.WriteLine(tk.Type);
-			}*/
-			Parser ps = new Parser(code);
+			Parse.Parser ps = new Parse.Parser(code, "./test.rs");
 			var s = ps.Parse();
 			Translator t = Translator.Create(s);
-			t.Configuration = new Configuration() { IncBPAfterCall = true };
 			string c = t.Compile();
 			Console.WriteLine(c);
 			File.WriteAllText("./test.asm", c);
+#else
+			if (CommandLine.Parser.Default.ParseArguments<Options>(args) is Parsed<Options> p)
+			{
+				var options = p.Value;
+				Stmt_Block[] files = options.InputFiles.
+					Select(f => new Parse.Parser(
+						File.ReadAllText(f), f).Parse()).ToArray();
+				Translator t = Translator.Create(files);
+				string code = t.Compile();
+				File.WriteAllText(options.OutputFile, code);
+				Console.WriteLine("Compilation is done without errors");
+			}
+#endif
 		}
 	}
 }
