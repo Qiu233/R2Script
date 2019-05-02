@@ -123,6 +123,29 @@ namespace R2Script.Lex
 					token.Line = Line;
 					switch (ch)
 					{
+						case '@':
+							{
+								Nextc();
+								StringBuilder sb = new StringBuilder(50);
+								while (char.IsLetter(ch) || char.IsDigit(ch) || ch == '_')
+								{
+									sb.Append(ch);
+									Nextc();
+								}
+								token.Value = sb.ToString();
+								switch (token.Value)
+								{
+									case "import":
+										token.Type = TokenType.TK_PRECOMP_IMPORT;
+										break;
+									case "include":
+										token.Type = TokenType.TK_PRECOMP_INCLUDE;
+										break;
+									default:
+										throw new LexException("Unsupported pre-compile label", Line);
+								}
+								return 0;
+							}
 						case '$':
 							{
 								Nextc();
@@ -199,18 +222,8 @@ namespace R2Script.Lex
 							token.Type = (TokenType)Get_Token_2((int)TokenType.TK_DE_MUL_EQ);
 							return 0;
 						case '/':
-							Nextc();
-							if (ch == '=')
-							{
-								Nextc();
-								token.Type = (TokenType)ch;
-								return 0;
-							}
-							else
-							{
-								token.Type = (TokenType)'/';
-								return 0;
-							}
+							token.Type = (TokenType)Get_Token_2((int)TokenType.TK_DE_DIV_EQ);
+							return 0;
 						case '=':
 							token.Type = (TokenType)Get_Token_2((int)TokenType.TK_OP_EQ);
 							return 0;
@@ -290,11 +303,11 @@ namespace R2Script.Lex
 							if (char.IsLetter(ch))
 							{
 								StringBuilder sb = new StringBuilder(50);
-								do
+								while (ch != 0 && (char.IsLetter(ch) || char.IsDigit(ch) || ch == '_'))
 								{
 									sb.Append(ch);
 									Nextc();
-								} while (char.IsLetter(ch) || char.IsDigit(ch) || ch == '_' || ch == '$');
+								}
 								token.Value = sb.ToString();
 								switch (token.Value)
 								{
@@ -303,9 +316,6 @@ namespace R2Script.Lex
 										break;
 									case "if":
 										token.Type = TokenType.TK_KW_IF;
-										break;
-									case "elif":
-										token.Type = TokenType.TK_KW_ELSEIF;
 										break;
 									case "else":
 										token.Type = TokenType.TK_KW_ELSE;

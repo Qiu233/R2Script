@@ -40,6 +40,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Parse\AST\Expr_Variable_Index.cs" />
+    <Compile Include="Parse\AST\Stmt_Assign_Index.cs" />
+    <Compile Include="Translation\Configuration.cs" />
     <Compile Include="Lex\LexException.cs" />
     <Compile Include="Lex\Token.cs" />
     <Compile Include="Lex\TokenType.cs" />
@@ -60,6 +63,10 @@
     <Compile Include="Parse\AST\Stmt_Function.cs" />
     <Compile Include="Parse\AST\Stmt_IF.cs" />
     <Compile Include="Parse\AST\Stmt_Block.cs" />
+    <Compile Include="Parse\AST\Stmt_Import.cs" />
+    <Compile Include="Parse\AST\Stmt_Include.cs" />
+    <Compile Include="Parse\AST\Stmt_Org.cs" />
+    <Compile Include="Parse\AST\Stmt_PreCompile.cs" />
     <Compile Include="Parse\AST\Stmt_Return.cs" />
     <Compile Include="Parse\AST\Stmt_Var.cs" />
     <Compile Include="Parse\AST\Stmt_While.cs" />
@@ -71,6 +78,7 @@
     <Compile Include="Translation\ASM\ASMSnippet.cs" />
     <Compile Include="Translation\ConstantManager.cs" />
     <Compile Include="Translation\FunctionFactory.cs" />
+    <Compile Include="Translation\LocalLabelManager.cs" />
     <Compile Include="Translation\OffsetTable.cs" />
     <Compile Include="Translation\TranslationException.cs" />
     <Compile Include="Translation\Translator.cs" />

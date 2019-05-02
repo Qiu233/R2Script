@@ -25,6 +25,7 @@ namespace R2Script
 			Parser ps = new Parser(code);
 			var s = ps.Parse();
 			Translator t = Translator.Create(s);
+			t.Configuration = new Configuration() { IncBPAfterCall = true };
 			string c = t.Compile();
 			Console.WriteLine(c);
 			File.WriteAllText("./test.asm", c);

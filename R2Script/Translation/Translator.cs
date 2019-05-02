@@ -3,6 +3,7 @@ using R2Script.Parse.AST;
 using R2Script.Translation.ASM;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 
@@ -10,7 +11,7 @@ namespace R2Script.Translation
 {
 	public class Translator
 	{
-		private IEnumerable<Stmt_Block> Code
+		private List<Stmt_Block> Code
 		{
 			get;
 		}
@@ -31,14 +32,29 @@ namespace R2Script.Translation
 		{
 			get;
 		}
-
-		public Translator(IEnumerable<Stmt_Block> block)
+		public List<KeyValuePair<string, string>> ImportedASM
 		{
+			get;
+		}
+		public Configuration Configuration
+		{
+			get;
+			set;
+		}
+
+		public Translator(List<Stmt_Block> block)
+		{
+			this.Configuration = new Configuration();
 			this.Code = block;
 			this.ConstantManager = ConstantManager.Create(this);
 			this.GlobalNameManager = GlobalNameManager.Create(this);
 			this.Functions = new List<FunctionFactory>();
 			this.Variables = new List<KeyValuePair<Stmt_Var.Variable, Stmt_Var>>();
+			this.ImportedASM = new List<KeyValuePair<string, string>>();
+			foreach (var b in block.ToArray())
+			{
+				PreCompile(b);
+			}
 			ProcessGlobals();
 			ProcessVariables();
 			ProcessFunctions();
@@ -47,11 +63,33 @@ namespace R2Script.Translation
 
 		public static Translator Create(params Stmt_Block[] block)
 		{
-			return new Translator(block);
+			return new Translator(block.ToList());
 		}
-		public static Translator Create(IEnumerable<Stmt_Block> block)
+
+		private void PreCompile(Stmt_Block b)
 		{
-			return new Translator(block);
+			foreach (var r in b.Statements)
+			{
+				if (r is Stmt_Import si)
+				{
+					if (File.Exists(si.File))
+						ImportedASM.Add(new KeyValuePair<string, string>(si.File, File.ReadAllText(si.File)));
+					else
+						throw new TranslationException("No such file", si.Line);
+				}
+				else if (r is Stmt_Include sinc)
+				{
+					if (File.Exists(sinc.File))
+					{
+						Parser p = new Parser(File.ReadAllText(sinc.File));
+						var block = p.Parse();
+						Code.Add(block);
+						PreCompile(block);
+					}
+					else
+						throw new TranslationException("No such file", sinc.Line);
+				}
+			}
 		}
 
 		private void ProcessGlobals()
@@ -60,7 +98,7 @@ namespace R2Script.Translation
 			{
 				foreach (var r in t.Statements)
 				{
-					if (!(r is Stmt_Var) && !(r is Stmt_Function))
+					if (!(r is Stmt_Var) && !(r is Stmt_Function) && !(r is Stmt_PreCompile))
 						throw new TranslationException("Unexpected statements", r.Line);
 					if (r is Stmt_Var sv)
 						foreach (var va in sv.Variables)
@@ -120,7 +158,7 @@ namespace R2Script.Translation
 			{
 				sb.Append($"; function {(f.Naked ? "naked " : "")}{f.Name}({string.Join(",", f.Function.Args)})\n");
 				sb.Append($"{GlobalNameManager.GetGlobalName(f.Name)}:\n");
-				sb.Append(f.GenerateCode().GetCode());
+				sb.Append(f.ASMCode.GetCode());
 				sb.Append("\n\n");
 			}
 			return sb.ToString();
@@ -180,16 +218,29 @@ namespace R2Script.Translation
 			}
 			return sb.ToString();
 		}
+		public string CompileASMs()
+		{
+			StringBuilder sb = new StringBuilder();
+			foreach (var f in ImportedASM)
+			{
+				sb.Append($";from file:'{f.Key}'\n");
+				sb.Append(f.Value);
+				sb.Append('\n');
+			}
+			return sb.ToString();
+		}
 		public string Compile()
 		{
 			if (!GlobalNameManager.GlobalNames.Contains("main"))
 				throw new TranslationException("Function 'main' is not defined", 0);
+			string asms = CompileASMs();
 			string function = CompileFunctions();
 			string data = CompileData();
 			string cons = CompileConstants();
-			string code = $"call {GlobalNameManager.GetGlobalName("main")}\n" +
+			string code = $"mov sp,0\n" +
+				$"call {GlobalNameManager.GetGlobalName("main")}\n" +
 				$"__mainLoop:jmp __mainLoop" +
-				$"\n{cons}\n{data}\n{function}";
+				$"\n{cons}\n{data}\n{function}\n{asms}";
 			return code;
 		}
 	}

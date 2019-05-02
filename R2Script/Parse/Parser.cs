@@ -18,16 +18,20 @@ namespace R2Script.Parse
 		{
 			get;
 		}
+		public string File
+		{
+			get;
+		}
 		private Tokenizer Tokenizer
 		{
 			get;
 		}
-		public Parser(string code)
+		public Parser(string code, string file = null)
 		{
 			this.SymbolTables = new Stack<SymbolTable>();
 			this.Code = code;
 			this.Tokenizer = new Tokenizer(code);
-
+			this.File = file;
 			this.RootSymbolTable = new SymbolTable(0);
 			SymbolTables.Push(RootSymbolTable);//root
 		}
@@ -134,20 +138,23 @@ namespace R2Script.Parse
 			string name = AcceptName();
 			AddSymbol(name, Line);
 			Stmt_Var.Variable v = null;
-			if (Match('='))
-			{
-				v = new Stmt_Var.Variable();
-				v.Name = name;
-				Accept();//=
-				v.InitialValue = E();
-			}
-			else if (Match('['))
+			if (Match('['))
 			{
 				v = new Stmt_Var.VariableArray();
 				v.Name = name;
 				Accept();//(
 				v.InitialValue = E();
 				Accept(']');
+			}
+			else
+			{
+				v = new Stmt_Var.Variable();
+				v.Name = name;
+				if (Match('='))
+				{
+					Accept();//=
+					v.InitialValue = E();
+				}
 			}
 			return v;
 		}
@@ -160,19 +167,7 @@ namespace R2Script.Parse
 				return null;
 			return GetVariableRaw();
 		}
-
-		public Stmt_IF.IFStructure GetElIF()
-		{
-			if (!Match(TokenType.TK_KW_ELSEIF))
-				return null;
-			Accept();//elif
-			Accept('(');
-			Expression condition = E();
-			Accept(')');
-			Statement body = GetStatement();
-			return new Stmt_IF.IFStructure(condition, body);
-		}
-
+		
 		/// <summary>
 		/// 
 		/// </summary>
@@ -196,9 +191,10 @@ namespace R2Script.Parse
 				Stmt_Var s = new Stmt_Var(Line);
 				s.Variables = new List<Stmt_Var.Variable>();
 
-				s.Variables.Add(GetVariableRaw());
-
 				Stmt_Var.Variable vt = null;
+				if ((vt = GetVariableRaw()) != null)
+					s.Variables.Add(vt);
+
 				while ((vt = GetVariable()) != null)
 					s.Variables.Add(vt);
 				AcceptLineEnd(forceSemicolon);//;
@@ -250,16 +246,26 @@ namespace R2Script.Parse
 				Accept(')');
 				Statement body = GetStatement();
 				si.IF.Add(new Stmt_IF.IFStructure(condition, body));
-
-				Stmt_IF.IFStructure ifs = null;
-				while ((ifs = GetElIF()) != null)
-					si.IF.Add(ifs);
-
-				if (Match(TokenType.TK_KW_ELSE))
+				
+				while (Match(TokenType.TK_KW_ELSE))
 				{
 					Accept();//else
-					si.Else = GetStatement();
+					if (Match(TokenType.TK_KW_IF))
+					{
+						Accept(TokenType.TK_KW_IF);
+						Accept('(');
+						Expression con = E();
+						Accept(')');
+						Statement bo = GetStatement();
+						si.IF.Add(new Stmt_IF.IFStructure(con, bo));
+					}
+					else
+					{
+						si.Else = GetStatement();
+						break;
+					}
 				}
+				
 
 				return si;
 			}
@@ -312,6 +318,16 @@ namespace R2Script.Parse
 					AcceptLineEnd();
 					return new Stmt_Assign(Line) { Name = name, Value = e };
 				}
+				else if (Match('['))
+				{
+					Accept();//[
+					Expression index = E();
+					Accept(']');
+					Accept('=');
+					Expression val = E();
+					AcceptLineEnd();
+					return new Stmt_Assign_Index(Line) { Name = name, Value = val, Index = index };
+				}
 				else if (Match('('))
 				{
 					var args = GetActualArguments();
@@ -326,6 +342,24 @@ namespace R2Script.Parse
 			{
 				var s = new Stmt_ASM(Line) { ASM = Token.Value };
 				Accept();//ASM
+				return s;
+			}
+			#endregion
+			#region Pre-Compile
+			else if (Match(TokenType.TK_PRECOMP_IMPORT))
+			{
+				Accept();//@import
+				string value = Token.Value;
+				Accept(TokenType.TK_STRING);//value
+				var s = new Stmt_Import(Line) { File = value.Substring(1, value.Length - 2) };
+				return s;
+			}
+			else if (Match(TokenType.TK_PRECOMP_INCLUDE))
+			{
+				Accept();//@include
+				string value = Token.Value;
+				Accept(TokenType.TK_STRING);//value
+				var s = new Stmt_Include(Line) { File = value.Substring(1, value.Length - 2) };
 				return s;
 			}
 			#endregion

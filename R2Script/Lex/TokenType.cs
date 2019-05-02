@@ -37,7 +37,6 @@ namespace R2Script.Lex
 		
 		TK_KW_RETURN,       //return
 		TK_KW_IF,           //if
-		TK_KW_ELSEIF,           //elif
 		TK_KW_ELSE,     //else
 		TK_KW_FOR,           //for
 		TK_KW_WHILE,           //while
@@ -46,6 +45,9 @@ namespace R2Script.Lex
 		TK_KW_FUNCTION,           //function
 		TK_KW_NAKED,           //naked
 		TK_KW_VAR,           //var
+
+		TK_PRECOMP_IMPORT,           //@import
+		TK_PRECOMP_INCLUDE,           //@include
 
 		TK_SEG_ASM,
 

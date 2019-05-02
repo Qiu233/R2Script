@@ -11,6 +11,8 @@ namespace R2Script.Translation
 {
 	public class FunctionFactory
 	{
+		private int _maxStack = 0;
+		private int _binaryLayer = 1;
 		public Translator Translator
 		{
 			get;
@@ -18,6 +20,10 @@ namespace R2Script.Translation
 		public Stmt_Function Function
 		{
 			get;
+		}
+		public int MaxStack
+		{
+			get => _maxStack;
 		}
 		public string Name => Function.Name;
 		public bool Naked => Function.Naked;
@@ -35,6 +41,21 @@ namespace R2Script.Translation
 			get;
 			set;
 		}
+
+		private LocalLabelManager FlowLabelManager
+		{
+			get;
+		}
+		private LocalLabelManager CalcLabelManager
+		{
+			get;
+		}
+		public ASMCode ASMCode
+		{
+			get;
+			private set;
+		}
+
 		private void PushNewOffsetTable()
 		{
 			var t = new OffsetTable(StackUse);
@@ -78,6 +99,8 @@ namespace R2Script.Translation
 			this.Function = func;
 			this.OffsetTables = new Stack<OffsetTable>();
 			this.RootOffsetTable = new OffsetTable(0);
+			this.FlowLabelManager = new LocalLabelManager("FLOW");
+			this.CalcLabelManager = new LocalLabelManager("CALC");
 			OffsetTables.Push(RootOffsetTable);
 		}
 		public static FunctionFactory FromFunction(Translator translator, Stmt_Function func)
@@ -85,6 +108,7 @@ namespace R2Script.Translation
 			var n = new FunctionFactory(translator, func);
 			CheckLocals(func.Body.SymbolTable, new List<string>());
 			n.MapArgs();
+			n.ASMCode = n.GenerateCode();
 			return n;
 		}
 
@@ -130,26 +154,32 @@ namespace R2Script.Translation
 		{
 			if (Naked)
 				return ASMSnippet.FromEmpty();
-			return ASMSnippet.FromCode(
+			var code = ASMSnippet.FromCode(
 				new ASMCode[] {
 					(ASMInstruction)"push bp",
-					(ASMInstruction)"mov bp,sp"
+					(ASMInstruction)"mov bp,sp",
 			});
+			if (MaxStack > 0)
+				code.Content.Add((ASMInstruction)$"sub sp,{MaxStack}");
+			return code;
 		}
 		private ASMCode GetFunctionEnd()
 		{
 			var asm = ASMSnippet.FromEmpty();
+			if (MaxStack > 0)
+				asm.Content.Add((ASMInstruction)$"add sp,{MaxStack}");
 			if (!Naked)
 				asm.Content.Add((ASMInstruction)"pop bp");
 			asm.Content.Add((ASMInstruction)"ret");
 			return asm;
 		}
 
-		public ASMCode GenerateCode()
+		private ASMCode GenerateCode()
 		{
 			var asm = ASMSnippet.FromEmpty();
+			var body = GenerateBody();
 			asm.Content.Add(GetFunctionHead());
-			asm.Content.Add(GenerateBody());
+			asm.Content.Add(body);
 			if (!asm.GetCode().Trim().EndsWith("ret"))
 				asm.Content.Add(GetFunctionEnd());
 			return asm;
@@ -182,16 +212,33 @@ namespace R2Script.Translation
 		}
 		private ASMCode GenerateStatement(Statement stmt)
 		{
-			if (stmt is Stmt_Var v)
+			if (stmt is Stmt_Block sb)
 			{
+				var asm = ASMSnippet.FromEmpty();
+				foreach (var subStmt in sb.Statements)
+					asm.Content.Add(GenerateStatement(subStmt));
+				return asm;
+			}
+			else if (stmt is Stmt_Var v)
+			{
+				ASMSnippet asm = ASMSnippet.FromEmpty();
 				foreach (var variable in v.Variables)
 				{
 					int off = StackUse;
-					AddOffset(variable.Name, off);
 					if (variable.InitialValue == null)
+					{
+						StackUse++;
+						_maxStack = Math.Max(_maxStack, StackUse);
+						AddOffset(variable.Name, off);
 						continue;
+					}
 					if (!(variable is Stmt_Var.Variable))
+					{
+						StackUse++;
+						_maxStack = Math.Max(_maxStack, StackUse);
+						AddOffset(variable.Name, off);
 						continue;
+					}
 					Stmt_Var.Variable vv = variable as Stmt_Var.Variable;
 					if (vv is Stmt_Var.VariableArray)
 					{
@@ -209,25 +256,31 @@ namespace R2Script.Translation
 						}
 						else
 							throw new TranslationException("Array's length should be a constant", v.Line);
+						if (len <= 0)
+							throw new TranslationException("Array's length should not be lower or equal to 0", v.Line);
 						StackUse += len + 1;
+						_maxStack = Math.Max(_maxStack, StackUse);
 
-						return ASMSnippet.FromCode(
+						AddOffset(variable.Name, off);
+						asm.Content.Add(ASMSnippet.FromCode(
 							new ASMCode[] {
 								(ASMInstruction)$"mov r0,bp",
-								(ASMInstruction)$"add r0,{GetLocalOffset(off+1)}",
+								(ASMInstruction)$"add r0,{GetLocalOffset(off+len)}",
 								(ASMInstruction)$"mov [bp{GetLocalOffset(off)}],r0",
-						});
+						}));
 					}
 					else
 					{
 						StackUse++;
-						return ASMSnippet.FromCode(
+						_maxStack = Math.Max(_maxStack, StackUse);
+						AddOffset(variable.Name, off);
+						asm.Content.Add(ASMSnippet.FromCode(
 							new ASMCode[] {
 								GenerateExpressionToMem(vv.InitialValue, $"[bp{GetLocalOffset(off)}]"),
-							});
+							}));
 					}
 				}
-				return null;
+				return asm;
 			}
 			else if (stmt is Stmt_Assign sa)
 			{
@@ -236,23 +289,48 @@ namespace R2Script.Translation
 					!Translator.GlobalNameManager.GlobalNames.Contains(sa.Name))
 					throw new TranslationException($"Unknown global or local:'{sa.Name}'", sa.Line);
 				if (b)
-					return ASMSnippet.FromCode(
-						new ASMCode[] {
-							GenerateExpressionToMem(sa.Value, $"[bp{GetLocalOffset(off)}]"),
-						});
+				{
+					if (!(sa is Stmt_Assign_Index))
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToMem(sa.Value, $"[bp{GetLocalOffset(off)}]"),
+							});
+					else
+					{
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToReg(sa.Value,"r3"),
+								GenerateExpressionToReg((sa as Stmt_Assign_Index).Index,"r0"),
+								(ASMInstruction)$"add r0,[bp{GetLocalOffset(off)}]",
+								(ASMInstruction)$"mov [r0],r3",
+							});
+					}
+				}
 				else
-					return ASMSnippet.FromCode(
-						new ASMCode[] {
-							GenerateExpressionToMem(sa.Value, $"[{GlobalNameManager.GetGlobalName(sa.Name)}]"),
-						});
+				{
+					if (!(sa is Stmt_Assign_Index))
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToMem(sa.Value, $"[{GlobalNameManager.GetGlobalName(sa.Name)}]"),
+							});
+					else
+					{
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToReg(sa.Value,"r3"),
+								GenerateExpressionToReg((sa as Stmt_Assign_Index).Index,"r0"),
+								(ASMInstruction)$"add r0,[{GlobalNameManager.GetGlobalName(sa.Name)}]",
+								(ASMInstruction)$"mov [r0],r3",
+							});
+					}
+				}
 			}
 			else if (stmt is Stmt_Return sr)
 			{
 				return ASMSnippet.FromCode(
 					new ASMCode[] {
 						GenerateExpressionToReg(sr.Value, "r0"),
-						(ASMInstruction)"pop bp",
-						(ASMInstruction)"ret",
+						GetFunctionEnd(),
 					});
 			}
 			else if (stmt is Stmt_Call sc)
@@ -262,6 +340,57 @@ namespace R2Script.Translation
 			else if (stmt is Stmt_ASM sasm)
 			{
 				return ASMSnippet.FromASMCode(sasm.ASM);
+			}
+			else if (stmt is Stmt_IF sif)
+			{
+				var asm = ASMSnippet.FromEmpty();
+				List<string> IFLabels = sif.IF.Select(t => FlowLabelManager.GetNew()).ToList();
+				IFLabels.Add(FlowLabelManager.GetNew());
+				for (int i = 0; i < sif.IF.Count; i++)
+				{
+					var ifc = sif.IF[i];
+					asm.Content.Add(GenerateExpressionToReg(ifc.Condition, "r0"));
+					asm.Content.Add((ASMInstruction)$"cmp r0,0");
+					asm.Content.Add((ASMInstruction)$"jz {IFLabels[i]}");
+
+					PushNewOffsetTable();
+					asm.Content.Add(GenerateStatement(ifc.Body));
+					PopNewOffsetTable();
+
+					asm.Content.Add((ASMInstruction)$"jmp {IFLabels.Last()}");
+					asm.Content.Add(ASMInstruction.Create($"{IFLabels[i]}:", false));
+				}
+
+				if (sif.Else != null)
+				{
+					PushNewOffsetTable();
+					asm.Content.Add(GenerateStatement(sif.Else));
+					PopNewOffsetTable();
+				}
+				asm.Content.Add(ASMInstruction.Create($"{IFLabels.Last()}:", false));
+
+
+				return asm;
+			}
+			else if (stmt is Stmt_While sw)
+			{
+				var asm = ASMSnippet.FromEmpty();
+				string loop = FlowLabelManager.GetNew();
+				string exit = FlowLabelManager.GetNew();
+
+				asm.Content.Add(ASMInstruction.Create($"{loop}:", false));
+				asm.Content.Add(GenerateExpressionToReg(sw.Condition, "r0"));
+				asm.Content.Add((ASMInstruction)$"cmp r0,0");
+				asm.Content.Add((ASMInstruction)$"jz {exit}");
+
+				PushNewOffsetTable();
+				asm.Content.Add(GenerateStatement(sw.Body));
+				PopNewOffsetTable();
+
+				asm.Content.Add((ASMInstruction)$"jmp {loop}");
+				asm.Content.Add(ASMInstruction.Create($"{exit}:", false));
+
+				return asm;
 			}
 			throw new TranslationException("Unexpected statement", stmt.Line);
 		}
@@ -274,10 +403,7 @@ namespace R2Script.Translation
 				asm.Content.Add(
 					GenerateExpressionToPush(args.ValueList[i]));
 			}
-			if (Translator.GlobalNameManager.GlobalNames.Contains(name))
-				asm.Content.Add((ASMInstruction)$"call {GlobalNameManager.GetGlobalName(name)}");
-			else
-				throw new TranslationException($"Unknown global(function):'{name}'", line);
+			asm.Content.Add((ASMInstruction)$"call {GlobalNameManager.GetGlobalName(name)}");
 			if (c > 0)
 				asm.Content.Add((ASMInstruction)$"add sp,{c}");
 			return asm;
@@ -287,15 +413,35 @@ namespace R2Script.Translation
 			if (e is Expr_Variable ev)
 			{
 				if (SearchOffset(ev.Name, out int off))
-					return ASMSnippet.FromCode(
-						new ASMCode[] {
-							(ASMInstruction)$"push [bp{GetLocalOffset(off)}]",
-					});
+				{
+					if (e is Expr_Variable_Index evi)
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToReg(evi.Index,"r0"),
+								(ASMInstruction)$"add r0,[bp{GetLocalOffset(off)}]",
+								(ASMInstruction)$"push [r0]",
+							});
+					else
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"push [bp{GetLocalOffset(off)}]",
+							});
+				}
 				else if (Translator.GlobalNameManager.GlobalNames.Contains(ev.Name))
-					return ASMSnippet.FromCode(
-						new ASMCode[] {
-							(ASMInstruction)$"push [{GlobalNameManager.GetGlobalName(ev.Name)}]",
-					});
+				{
+					if (e is Expr_Variable_Index evi)
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToReg(evi.Index,"r0"),
+								(ASMInstruction)$"add r0,[{GlobalNameManager.GetGlobalName(ev.Name)}]",
+								(ASMInstruction)$"push [r0]",
+							});
+					else
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"push [{GlobalNameManager.GetGlobalName(ev.Name)}]",
+							});
+				}
 				else
 					throw new TranslationException("Unknown global or local", ev.Line);
 			}
@@ -394,15 +540,35 @@ namespace R2Script.Translation
 			if (e is Expr_Variable ev)
 			{
 				if (SearchOffset(ev.Name, out int off))
-					return ASMSnippet.FromCode(
-						new ASMCode[] {
-							(ASMInstruction)$"mov {targetReg},[bp{GetLocalOffset(off)}]",
-				});
+				{
+					if (e is Expr_Variable_Index evi)
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToReg(evi.Index,targetReg),
+								(ASMInstruction)$"add {targetReg},[bp{GetLocalOffset(off)}]",
+								(ASMInstruction)$"mov {targetReg},[{targetReg}]",
+							});
+					else
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"mov {targetReg},[bp{GetLocalOffset(off)}]",
+							});
+				}
 				else if (Translator.GlobalNameManager.GlobalNames.Contains(ev.Name))
-					return ASMSnippet.FromCode(
-						new ASMCode[] {
-							(ASMInstruction)$"mov {targetReg},[{GlobalNameManager.GetGlobalName(ev.Name)}]",
-					});
+				{
+					if (e is Expr_Variable_Index evi)
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToReg(evi.Index,targetReg),
+								(ASMInstruction)$"add {targetReg},[{GlobalNameManager.GetGlobalName(ev.Name)}]",
+								(ASMInstruction)$"mov {targetReg},[{targetReg}]",
+							});
+					else
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"mov {targetReg},[{GlobalNameManager.GetGlobalName(ev.Name)}]",
+							});
+				}
 				else
 					throw new TranslationException("Unknown global or local", ev.Line);
 			}
@@ -499,17 +665,39 @@ namespace R2Script.Translation
 			if (e is Expr_Variable ev)
 			{
 				if (SearchOffset(ev.Name, out int off))
-					return ASMSnippet.FromCode(
-						new ASMCode[] {
-							(ASMInstruction)$"mov r0,[bp{GetLocalOffset(off)}]",
-							(ASMInstruction)$"mov {targetMem},r0",
-				});
+				{
+					if (e is Expr_Variable_Index evi)
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToReg(evi.Index,"r0"),
+								(ASMInstruction)$"add r0,[bp{GetLocalOffset(off)}]",
+								(ASMInstruction)$"mov r0,[r0]",
+								(ASMInstruction)$"mov {targetMem},r0",
+							});
+					else
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"mov r0,[bp{GetLocalOffset(off)}]",
+								(ASMInstruction)$"mov {targetMem},r0",
+							});
+				}
 				else if (Translator.GlobalNameManager.GlobalNames.Contains(ev.Name))
-					return ASMSnippet.FromCode(
+				{
+					if (e is Expr_Variable_Index evi)
+						return ASMSnippet.FromCode(
+							new ASMCode[] {
+								GenerateExpressionToReg(evi.Index,"r0"),
+								(ASMInstruction)$"add r0,[{GlobalNameManager.GetGlobalName(ev.Name)}]",
+								(ASMInstruction)$"mov r0,[r0]",
+								(ASMInstruction)$"mov {targetMem},r0",
+							});
+					else
+						return ASMSnippet.FromCode(
 						new ASMCode[] {
 							(ASMInstruction)$"mov r0,[{GlobalNameManager.GetGlobalName(ev.Name)}]",
 							(ASMInstruction)$"mov {targetMem},r0",
 					});
+				}
 				else
 					throw new TranslationException("Unknown global or local", ev.Line);
 			}
@@ -530,14 +718,16 @@ namespace R2Script.Translation
 
 					return ASMSnippet.FromCode(
 						new ASMCode[] {
-							(ASMInstruction)$"mov {targetMem},{ConstantManager.GetConstant(n)}",
+							(ASMInstruction)$"mov r0,{ConstantManager.GetConstant(n)}",
+							(ASMInstruction)$"mov {targetMem},r0",
 					});
 				}
 				else//number
 				{
 					return ASMSnippet.FromCode(
 						new ASMCode[] {
-							(ASMInstruction)$"mov {targetMem},{eval.Value}",
+							(ASMInstruction)$"mov r0,{eval.Value}",
+							(ASMInstruction)$"mov {targetMem},r0",
 					});
 				}
 			}
@@ -550,7 +740,8 @@ namespace R2Script.Translation
 
 				return ASMSnippet.FromCode(
 					new ASMCode[] {
-							(ASMInstruction)$"mov {targetMem},{ConstantManager.GetConstant(n)}",
+							(ASMInstruction)$"mov r0,{ConstantManager.GetConstant(n)}",
+							(ASMInstruction)$"mov {targetMem},r0",
 					});
 			}
 			else if (e is Expr_Binary eb)
@@ -605,6 +796,50 @@ namespace R2Script.Translation
 		}
 
 
+		private ASMCode GenerateBinaryRaw(Expr_Binary b)
+		{
+			string m1 = $"[bp{GetLocalOffset(_binaryLayer)}]";
+			string m2 = $"[bp{GetLocalOffset(_binaryLayer + 1)}]";
+			var asm = ASMSnippet.FromEmpty();
+			if (b.Left is Expr_Value && b.Right is Expr_Value)
+			{
+				asm.Content.Add(GenerateExpressionToReg(b.Left, "r1"));
+				asm.Content.Add(GenerateExpressionToReg(b.Right, "r2"));
+			}
+			else if ((b.Left is Expr_Value && b.Right is Expr_Variable) ||
+				(b.Left is Expr_Variable && b.Right is Expr_Value) || (b.Left is Expr_Variable && b.Right is Expr_Variable))
+			{
+				asm.Content.Add(GenerateExpressionToReg(b.Left, "r1"));
+				asm.Content.Add(GenerateExpressionToReg(b.Right, "r2"));
+			}
+			else if (b.Left is Expr_Value || b.Left is Expr_Variable)
+			{
+				_binaryLayer++;
+				asm.Content.Add(GenerateExpressionToMem(b.Right, m1));
+				asm.Content.Add((ASMInstruction)$"mov r2,{m1}");
+				asm.Content.Add(GenerateExpressionToReg(b.Left, "r1"));
+				_binaryLayer--;
+			}
+			else if (b.Right is Expr_Value || b.Right is Expr_Variable)
+			{
+				_binaryLayer++;
+				asm.Content.Add(GenerateExpressionToMem(b.Left, m1));
+				asm.Content.Add((ASMInstruction)$"mov r1,{m1}");
+				asm.Content.Add(GenerateExpressionToReg(b.Right, "r2"));
+				_binaryLayer--;
+			}
+			else
+			{
+				_binaryLayer++;
+				asm.Content.Add(GenerateExpressionToMem(b.Left, m1));
+				asm.Content.Add(GenerateExpressionToMem(b.Right, m2));
+				asm.Content.Add((ASMInstruction)$"mov r1,{m1}");
+				asm.Content.Add((ASMInstruction)$"mov r2,{m2}");
+				_binaryLayer--;
+			}
+			return asm;
+		}
+
 		/// <summary>
 		/// r1/r2
 		/// </summary>
@@ -612,28 +847,102 @@ namespace R2Script.Translation
 		/// <returns></returns>
 		private ASMCode GenerateBinaryExpression(Expr_Binary b)
 		{
-			string opCode = null;
+			ASMSnippet asm = ASMSnippet.FromEmpty();
+			asm.Content.Add(GenerateBinaryRaw(b));
 			switch (b.Operator)
 			{
 				case "+":
-					opCode = "add";
+					asm.Content.Add((ASMInstruction)"add r1,r2");
 					break;
 				case "-":
-					opCode = "sub";
+					asm.Content.Add((ASMInstruction)"sub r1,r2");
 					break;
+				case "==":
+					{
+						string l1 = CalcLabelManager.GetNew();
+						string l2 = CalcLabelManager.GetNew();
+						asm.Content.Add(ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"cmp r1,r2",
+								(ASMInstruction)$"jz {l1}",
+								(ASMInstruction)$"mov r1,0",
+								(ASMInstruction)$"jmp {l2}",
+								ASMInstruction.Create($"{l1}:",false),
+								(ASMInstruction)$"mov r1,1",
+								ASMInstruction.Create($"{l2}:",false),
+							}));
+						break;
+					}
+				case ">":
+					{
+						string l1 = CalcLabelManager.GetNew();
+						string l2 = CalcLabelManager.GetNew();
+						asm.Content.Add(ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"cmp r1,r2",
+								(ASMInstruction)$"jg {l1}",
+								(ASMInstruction)$"mov r1,0",
+								(ASMInstruction)$"jmp {l2}",
+								ASMInstruction.Create($"{l1}:",false),
+								(ASMInstruction)$"mov r1,1",
+								ASMInstruction.Create($"{l2}:",false),
+							}));
+						break;
+					}
+				case ">=":
+					{
+						string l1 = CalcLabelManager.GetNew();
+						string l2 = CalcLabelManager.GetNew();
+						asm.Content.Add(ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"cmp r1,r2",
+								(ASMInstruction)$"jge {l1}",
+								(ASMInstruction)$"mov r1,0",
+								(ASMInstruction)$"jmp {l2}",
+								ASMInstruction.Create($"{l1}:",false),
+								(ASMInstruction)$"mov r1,1",
+								ASMInstruction.Create($"{l2}:",false),
+							}));
+						break;
+					}
+				case "<":
+					{
+
+						string l1 = CalcLabelManager.GetNew();
+						string l2 = CalcLabelManager.GetNew();
+						asm.Content.Add(ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"cmp r1,r2",
+								(ASMInstruction)$"jl {l1}",
+								(ASMInstruction)$"mov r1,0",
+								(ASMInstruction)$"jmp {l2}",
+								ASMInstruction.Create($"{l1}:",false),
+								(ASMInstruction)$"mov r1,1",
+								ASMInstruction.Create($"{l2}:",false),
+							}));
+						break;
+					}
+				case "<=":
+					{
+
+						string l1 = CalcLabelManager.GetNew();
+						string l2 = CalcLabelManager.GetNew();
+						asm.Content.Add(ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"cmp r1,r2",
+								(ASMInstruction)$"jle {l1}",
+								(ASMInstruction)$"mov r1,0",
+								(ASMInstruction)$"jmp {l2}",
+								ASMInstruction.Create($"{l1}:",false),
+								(ASMInstruction)$"mov r1,1",
+								ASMInstruction.Create($"{l2}:",false),
+							}));
+						break;
+					}
 				default:
 					throw new TranslationException($"Unexpected operator:'{b.Operator}'", b.Line);
 			}
-
-
-			return ASMSnippet.FromCode(
-				new ASMCode[] {
-							GenerateExpressionToPush(b.Left),
-							GenerateExpressionToPush(b.Right),
-							(ASMInstruction)"pop r2",
-							(ASMInstruction)"pop r1",
-							(ASMInstruction)$"{opCode} r1,r2",
-				});
+			return asm;
 		}
 	}
 }
