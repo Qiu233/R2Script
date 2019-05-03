@@ -152,9 +152,16 @@ namespace R2Script.Lex
 												Nextc();
 												break;
 											}
+											else if (ch == '\n')
+											{
+												Line++;
+											}
 										}
 										else
+										{
+											if (ch == '\n') Line++;
 											Nextc();
+										}
 									}
 									return COMMENT;
 								}
@@ -266,10 +273,7 @@ namespace R2Script.Lex
 							token.Type = (TokenType)Get_Token_2((int)TokenType.TK_OP_EQ);
 							return 0;
 						case '!':
-							Nextc();
-							if (ch != '=') return ERR_LEX_INVALID_CHARACTER;
-							Nextc();
-							token.Type = TokenType.TK_OP_NE;
+							token.Type = (TokenType)Get_Token_2((int)TokenType.TK_OP_NE);
 							return 0;
 						case '0':
 						case '1':

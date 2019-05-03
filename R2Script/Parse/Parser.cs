@@ -423,6 +423,18 @@ namespace R2Script.Parse
 				Expr_Binary eb1 = D1(eb);
 				return eb1 ?? eb;
 			}
+			if (Match((int)TokenType.TK_OP_NE))
+			{
+				Token t = Token;
+				Accept();
+				Expr_Binary eb = new Expr_Binary(Line, File);
+				Expression right = R();
+				eb.Operator = "!=";
+				eb.Left = left;
+				eb.Right = right;
+				Expr_Binary eb1 = D1(eb);
+				return eb1 ?? eb;
+			}
 			else if (Match((int)TokenType.TK_OP_GE))
 			{
 				Token t = Token;
@@ -594,6 +606,14 @@ namespace R2Script.Parse
 				Expression e = E();
 				Accept(')');
 				return e;
+			}
+			else if (Match('!'))
+			{
+				Accept();//!
+				Expr_Single es = new Expr_Single(Line, File);
+				es.Operator = "!";
+				es.Value = E();
+				return es;
 			}
 			else if (Match('['))
 			{

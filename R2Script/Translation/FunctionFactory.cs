@@ -527,6 +527,22 @@ namespace R2Script.Translation
 					   });
 				}
 			}
+			else if (e is Expr_Single es)
+			{
+				var o = es.TryContract();
+				if (o is Expr_Value)
+				{
+					return GenerateExpressionToPush(o);
+				}
+				else
+				{
+					return ASMSnippet.FromCode(
+					   new ASMCode[] {
+						   GenerateSingleExpression(es),
+						   (ASMInstruction)$"push r1",
+					   });
+				}
+			}
 			else if (e is Expr_Ref er)
 			{
 				if (er.Type == Expr_Ref.RefType.Address)
@@ -650,6 +666,22 @@ namespace R2Script.Translation
 					return ASMSnippet.FromCode(
 					   new ASMCode[] {
 						   GenerateBinaryExpression(eb),
+						   (ASMInstruction)$"mov {targetReg},r1",
+					   });
+				}
+			}
+			else if (e is Expr_Single es)
+			{
+				var o = es.TryContract();
+				if (o is Expr_Value)
+				{
+					return GenerateExpressionToReg(o, targetReg);
+				}
+				else
+				{
+					return ASMSnippet.FromCode(
+					   new ASMCode[] {
+						   GenerateSingleExpression(es),
 						   (ASMInstruction)$"mov {targetReg},r1",
 					   });
 				}
@@ -786,6 +818,22 @@ namespace R2Script.Translation
 					   });
 				}
 			}
+			else if (e is Expr_Single es)
+			{
+				var o = es.TryContract();
+				if (o is Expr_Value)
+				{
+					return GenerateExpressionToMem(o, targetMem);
+				}
+				else
+				{
+					return ASMSnippet.FromCode(
+					   new ASMCode[] {
+						   GenerateSingleExpression(es),
+						   (ASMInstruction)$"mov {targetMem},r1",
+					   });
+				}
+			}
 			else if (e is Expr_Ref er)
 			{
 				if (er.Type == Expr_Ref.RefType.Address)
@@ -821,6 +869,22 @@ namespace R2Script.Translation
 			throw new TranslationException("Unexpected expression", e.Line, e.File);
 		}
 
+		private ASMCode GenerateSingleExpression(Expr_Single s)
+		{
+			switch (s.Operator)
+			{
+				case "!":
+					return GenerateBinaryExpression(
+						new Expr_Binary(s.Line, s.File)
+						{
+							Operator = "==",
+							Left = s.Value,
+							Right = new Expr_Value(s.Line, s.File) { Value = "0" }
+						});
+				default:
+					throw new TranslationException($"Unexpected operator:'{s.Operator}'", s.Line, s.File);
+			}
+		}
 
 		private ASMCode GenerateBinaryRaw(Expr_Binary b)
 		{
@@ -866,6 +930,7 @@ namespace R2Script.Translation
 			return asm;
 		}
 
+
 		/// <summary>
 		/// r1/r2
 		/// </summary>
@@ -883,6 +948,47 @@ namespace R2Script.Translation
 				case "-":
 					asm.Content.Add((ASMInstruction)"sub r1,r2");
 					break;
+				case "|":
+					asm.Content.Add((ASMInstruction)"or r1,r2");
+					break;
+				case "&":
+					asm.Content.Add((ASMInstruction)"and r1,r2");
+					break;
+				case "^":
+					asm.Content.Add((ASMInstruction)"xor r1,r2");
+					break;
+				case "&&":
+					{
+						string l1 = CalcLabelManager.GetNew();
+						string l2 = CalcLabelManager.GetNew();
+						asm.Content.Add(ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"ands r1,r2",
+								(ASMInstruction)$"jnz {l1}",
+								(ASMInstruction)$"mov r1,0",
+								(ASMInstruction)$"jmp {l2}",
+								ASMInstruction.Create($"{l1}:",false),
+								(ASMInstruction)$"mov r1,1",
+								ASMInstruction.Create($"{l2}:",false),
+							}));
+						break;
+					}
+				case "||":
+					{
+						string l1 = CalcLabelManager.GetNew();
+						string l2 = CalcLabelManager.GetNew();
+						asm.Content.Add(ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"ors r1,r2",
+								(ASMInstruction)$"jnz {l1}",
+								(ASMInstruction)$"mov r1,0",
+								(ASMInstruction)$"jmp {l2}",
+								ASMInstruction.Create($"{l1}:",false),
+								(ASMInstruction)$"mov r1,1",
+								ASMInstruction.Create($"{l2}:",false),
+							}));
+						break;
+					}
 				case "==":
 					{
 						string l1 = CalcLabelManager.GetNew();
@@ -891,6 +997,22 @@ namespace R2Script.Translation
 							new ASMCode[] {
 								(ASMInstruction)$"cmp r1,r2",
 								(ASMInstruction)$"jz {l1}",
+								(ASMInstruction)$"mov r1,0",
+								(ASMInstruction)$"jmp {l2}",
+								ASMInstruction.Create($"{l1}:",false),
+								(ASMInstruction)$"mov r1,1",
+								ASMInstruction.Create($"{l2}:",false),
+							}));
+						break;
+					}
+				case "!=":
+					{
+						string l1 = CalcLabelManager.GetNew();
+						string l2 = CalcLabelManager.GetNew();
+						asm.Content.Add(ASMSnippet.FromCode(
+							new ASMCode[] {
+								(ASMInstruction)$"cmp r1,r2",
+								(ASMInstruction)$"jnz {l1}",
 								(ASMInstruction)$"mov r1,0",
 								(ASMInstruction)$"jmp {l2}",
 								ASMInstruction.Create($"{l1}:",false),

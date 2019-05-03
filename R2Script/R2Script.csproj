@@ -44,6 +44,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Options.cs" />
+    <Compile Include="Parse\AST\Contractable.cs" />
+    <Compile Include="Parse\AST\Expr_Single.cs" />
     <Compile Include="Parse\AST\Expr_Variable_Index.cs" />
     <Compile Include="Parse\AST\Stmt_Assign_Index.cs" />
     <Compile Include="Translation\Configuration.cs" />

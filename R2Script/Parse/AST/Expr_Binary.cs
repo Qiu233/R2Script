@@ -5,7 +5,7 @@ using System.Text;
 
 namespace R2Script.Parse.AST
 {
-	public class Expr_Binary : Expression
+	public class Expr_Binary : Expression, Contractable
 	{
 		public Expression Left, Right;
 		public string Operator;
@@ -16,9 +16,9 @@ namespace R2Script.Parse.AST
 
 		public Expression TryContract()
 		{
-			if (Left is Expr_Binary bl)
+			if (Left is Contractable bl)
 				Left = bl.TryContract();
-			if (Right is Expr_Binary br)
+			if (Right is Contractable br)
 				Right = br.TryContract();
 			if (!(Left is Expr_Value && Right is Expr_Value))
 				return this;
