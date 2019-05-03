@@ -20,7 +20,9 @@ namespace R2Script
 			string code = File.ReadAllText("./test.rs");
 			Parse.Parser ps = new Parse.Parser(code, "./test.rs");
 			var s = ps.Parse();
-			Translator t = Translator.Create(s);
+			var paths = new List<string>();
+			paths.Add(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lib"));
+			Translator t = Translator.Create(new Stmt_Block[] { s }, paths);
 			string c = t.Compile();
 			Console.WriteLine(c);
 			File.WriteAllText("./test.asm", c);
@@ -29,15 +31,22 @@ namespace R2Script
 			{
 				var options = p.Value;
 				var paths = options.LibPaths.ToList();
-				paths.Add(AppDomain.CurrentDomain.BaseDirectory);
 				paths.Add(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lib"));
 				Stmt_Block[] files = options.InputFiles.
 					Select(f => new Parse.Parser(
 						File.ReadAllText(f), f).Parse()).ToArray();
-				Translator t = Translator.Create(files, paths);
-				string code = t.Compile();
-				File.WriteAllText(options.OutputFile, code);
-				Console.WriteLine("Compilation is done without errors");
+				try
+				{
+					Translator t = Translator.Create(files, paths);
+					string code = t.Compile();
+					File.WriteAllText(options.OutputFile, code);
+					Console.WriteLine("Compilation is done without errors");
+				}
+				catch (Exception e)
+				{
+					Console.WriteLine("Error:");
+					Console.WriteLine(e.Message);
+				}
 			}
 #endif
 		}

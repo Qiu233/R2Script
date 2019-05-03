@@ -45,17 +45,12 @@ namespace R2Script.Translation
 		{
 			get;
 		}
-		public List<string> SearchedFiles
-		{
-			get;
-		}
 
 		public Translator(List<Stmt_Block> block, IEnumerable<string> paths = null)
 		{
 			this.SearchingPath = new List<string>();
-			this.SearchingPath.AddRange(paths);
-			this.SearchedFiles = new List<string>();
-			SearchFiles();
+			if (paths != null)
+				this.SearchingPath.AddRange(paths);
 			this.Configuration = new Configuration();
 			this.Code = block;
 			this.ConstantManager = ConstantManager.Create(this);
@@ -72,47 +67,26 @@ namespace R2Script.Translation
 			ProcessFunctions();
 		}
 
-		private void SearchFiles()
-		{
-			foreach (var d in SearchingPath)
-			{
-				if (!Directory.Exists(d))
-					continue;
-				foreach (var file in Directory.EnumerateFiles(d))
-					SearchedFiles.Add(file);
-			}
-			foreach (var file in Directory.EnumerateFiles(Directory.GetCurrentDirectory()))
-			{
-				SearchedFiles.Add(file);
-			}
-		}
 
-		private bool GetLibFile(string name, out string lib)
+		private bool GetLibFile(string name, string curPath, out string lib)
 		{
-			if (name.Contains("/") || name.Contains("\\"))
+			string p = Path.Combine(curPath, name);
+			if (File.Exists(p))
 			{
-				if (File.Exists(name))
-				{
-					lib = null;
-					return false;
-				}
-				lib = File.ReadAllText(name);
+				lib = File.ReadAllText(p);
 				return true;
 			}
-			var r = SearchedFiles.Where(t => Path.GetFileName(t) == name);
-			if (r.Count() > 1)
+			foreach (var sp in SearchingPath)
 			{
-				string s = $"More than one file matched '{name}'\n";
-				s += string.Join("\n", r);
-				throw new TranslationException(s, 0, "");
+				string pp = Path.Combine(sp, name);
+				if (File.Exists(pp))
+				{
+					lib = File.ReadAllText(pp);
+					return true;
+				}
 			}
-			else if (r.Count() == 0)
-			{
-				lib = null;
-				return false;
-			}
-			lib = File.ReadAllText(r.ElementAt(0));
-			return true;
+			lib = null;
+			return false;
 		}
 
 
@@ -127,14 +101,14 @@ namespace R2Script.Translation
 			{
 				if (r is Stmt_Import si)
 				{
-					if (GetLibFile(si.TargetFile, out string lib))
+					if (GetLibFile(si.TargetFile, Path.GetDirectoryName(b.File), out string lib))
 						ImportedASM.Add(new KeyValuePair<string, string>(si.TargetFile, lib));
 					else
-						throw new TranslationException($"No such file:'{si.TargetFile}'", si.Line, si.TargetFile);
+						throw new TranslationException($"No such file:'{si.TargetFile}'", si.Line, b.File);
 				}
 				else if (r is Stmt_Include sinc)
 				{
-					if (GetLibFile(sinc.TargetFile, out string lib))
+					if (GetLibFile(sinc.TargetFile, Path.GetDirectoryName(b.File), out string lib))
 					{
 						Parser p = new Parser(lib, sinc.TargetFile);
 						var block = p.Parse();
@@ -142,7 +116,7 @@ namespace R2Script.Translation
 						PreCompile(block);
 					}
 					else
-						throw new TranslationException($"No such file:'{sinc.TargetFile}'", sinc.Line, sinc.TargetFile);
+						throw new TranslationException($"No such file:'{sinc.TargetFile}'", sinc.Line, b.File);
 				}
 			}
 		}
