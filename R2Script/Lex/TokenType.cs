@@ -8,7 +8,7 @@ namespace R2Script.Lex
 	public enum TokenType
 	{
 		TK_FIRST = 128,
-		
+
 
 		TK_NAME,
 		TK_NULL,
@@ -34,7 +34,7 @@ namespace R2Script.Lex
 		TK_DE_DIV_EQ,       ///=
 		TK_DE_LSHIFT_EQ,    //<<=
 		TK_DE_RSHIFT_EQ,    //>>=
-		
+
 		TK_KW_RETURN,       //return
 		TK_KW_IF,           //if
 		TK_KW_ELSE,     //else

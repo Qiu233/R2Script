@@ -29,6 +29,7 @@ namespace R2Script.Lex
 		public const int ERR_LEX_INVALID_CHARACTER = -1;
 		public const int ERR_LEX_END_OF_FILE = -2;
 		public const int ERR_LEX_UNAVAILABLE_ESC = -3;
+		private const int COMMENT = -10;
 		public Token Get()
 		{
 			return token;
@@ -80,7 +81,13 @@ namespace R2Script.Lex
 			}
 			return def;
 		}
-		public int Next()
+		public int NextToken()
+		{
+			int r = 0;
+			while ((r = NextTokenRaw()) == COMMENT) ;
+			return r;
+		}
+		private int NextTokenRaw()
 		{
 			token = new Token();
 			token.File = File;
@@ -99,16 +106,6 @@ namespace R2Script.Lex
 						case ' ':
 						case '\t':
 							Nextc();
-							break;
-						case '#':
-							{
-								while (ch == '#')//注释
-								{
-									Nextc();
-									while (ch != -1 && ch != '\n')
-										Nextc();
-								}
-							}
 							break;
 						default:
 							flag = false;
@@ -129,7 +126,45 @@ namespace R2Script.Lex
 					token.Line = Line;
 					switch (ch)
 					{
-						case '@':
+						case '/':
+							{
+								Nextc();
+								if (ch == '=')
+								{
+									token.Type = TokenType.TK_DE_DIV_EQ;
+									return 0;
+								}
+								else if (ch == '/')
+								{
+									while (ch != -1 && ch != '\n')
+										Nextc();
+									return COMMENT;
+								}
+								else if (ch == '*')
+								{
+									while (ch != -1)
+									{
+										if (ch == '*')
+										{
+											Nextc();
+											if (ch == '/')
+											{
+												Nextc();
+												break;
+											}
+										}
+										else
+											Nextc();
+									}
+									return COMMENT;
+								}
+								else
+								{
+									token.Type = (TokenType)'/';
+									return 0;
+								}
+							}
+						case '#':
 							{
 								Nextc();
 								StringBuilder sb = new StringBuilder(50);
@@ -226,9 +261,6 @@ namespace R2Script.Lex
 							return 0;
 						case '*':
 							token.Type = (TokenType)Get_Token_2((int)TokenType.TK_DE_MUL_EQ);
-							return 0;
-						case '/':
-							token.Type = (TokenType)Get_Token_2((int)TokenType.TK_DE_DIV_EQ);
 							return 0;
 						case '=':
 							token.Type = (TokenType)Get_Token_2((int)TokenType.TK_OP_EQ);

@@ -13,6 +13,8 @@ namespace R2Script.Translation
 	{
 		private int _maxStack = 0;
 		private int _binaryLayer = 1;
+		private string _continueLabel = null;
+		private string _breakLabel = null;
 		public Translator Translator
 		{
 			get;
@@ -383,14 +385,38 @@ namespace R2Script.Translation
 				asm.Content.Add((ASMInstruction)$"cmp r0,0");
 				asm.Content.Add((ASMInstruction)$"jz {exit}");
 
+				string tmp_break_label = _breakLabel;
+				string tmp_continue_label = _continueLabel;
+				_breakLabel = exit;
+				_continueLabel = loop;
 				PushNewOffsetTable();
 				asm.Content.Add(GenerateStatement(sw.Body));
 				PopNewOffsetTable();
+				_breakLabel = tmp_break_label;
+				_continueLabel = tmp_continue_label;
 
 				asm.Content.Add((ASMInstruction)$"jmp {loop}");
 				asm.Content.Add(ASMInstruction.Create($"{exit}:", false));
 
 				return asm;
+			}
+			else if (stmt is Stmt_Break)
+			{
+				if (_breakLabel == null)
+					throw new TranslationException("'break' should be inside a loop", stmt.Line, stmt.File);
+				return ASMSnippet.FromCode(
+					new ASMCode[] {
+						(ASMInstruction)$"jmp {_breakLabel}",
+					});
+			}
+			else if (stmt is Stmt_Continue)
+			{
+				if (_continueLabel == null)
+					throw new TranslationException("'continue' should be inside a loop", stmt.Line, stmt.File);
+				return ASMSnippet.FromCode(
+					new ASMCode[] {
+						(ASMInstruction)$"jmp {_continueLabel}",
+					});
 			}
 			throw new TranslationException("Unexpected statement", stmt.Line, stmt.File);
 		}

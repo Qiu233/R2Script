@@ -40,7 +40,7 @@ namespace R2Script.Parse
 		private int Line => Token.Line;
 		private int NextToken()
 		{
-			return Tokenizer.Next();
+			return Tokenizer.NextToken();
 		}
 		private bool Match(TokenType type)
 		{
