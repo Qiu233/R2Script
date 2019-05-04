@@ -126,6 +126,28 @@ namespace R2Script.Lex
 					token.Line = Line;
 					switch (ch)
 					{
+						case '\'':
+							{
+								Nextc();
+								StringBuilder sb = new StringBuilder(1024);
+								sb.Append("\'");
+								while (ch != 0 && ch != '\'')
+								{
+									char c = ch;
+									if (ch == '\\')
+									{
+										sb.Append(c);
+										Nextc();
+									}
+									sb.Append(c);
+									Nextc();
+								}
+								sb.Append("\'");
+								Nextc();//pass '\''
+								token.Type = TokenType.TK_CHARACTER;
+								token.Value = sb.ToString();
+								return 0;
+							}
 						case '/':
 							{
 								Nextc();
@@ -389,7 +411,7 @@ namespace R2Script.Lex
 								}
 								return 0;
 							}
-							throw new LexException("Invalid character", Line, File);
+							throw new LexException($"Invalid character:{ch}", Line, File);
 					}
 				}
 			}

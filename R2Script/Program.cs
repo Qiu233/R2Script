@@ -46,6 +46,7 @@ namespace R2Script
 				{
 					Console.WriteLine("Error:");
 					Console.WriteLine(e.Message);
+					Console.WriteLine(e.StackTrace);
 				}
 			}
 #endif

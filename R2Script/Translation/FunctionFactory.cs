@@ -481,7 +481,7 @@ namespace R2Script.Translation
 			}
 			else if (e is Expr_Value eval)
 			{
-				if (eval.Value.StartsWith("\"") || eval.Value.StartsWith("\'"))
+				if (eval.Value.StartsWith("\""))
 				{
 					int n = Translator.ConstantManager.AddString(
 						eval.Value.Substring(0, eval.Value.Length));
@@ -491,7 +491,7 @@ namespace R2Script.Translation
 							(ASMInstruction)$"push {ConstantManager.GetConstant(n)}",
 					});
 				}
-				else//number
+				else//number or character
 				{
 					return ASMSnippet.FromCode(
 						new ASMCode[] {
@@ -624,7 +624,7 @@ namespace R2Script.Translation
 			}
 			else if (e is Expr_Value eval)
 			{
-				if (eval.Value.StartsWith("\"") || eval.Value.StartsWith("\'"))
+				if (eval.Value.StartsWith("\""))
 				{
 					int n = Translator.ConstantManager.AddString(
 						eval.Value.Substring(0, eval.Value.Length));
@@ -769,7 +769,7 @@ namespace R2Script.Translation
 			}
 			else if (e is Expr_Value eval)
 			{
-				if (eval.Value.StartsWith("\"") || eval.Value.StartsWith("\'"))
+				if (eval.Value.StartsWith("\""))
 				{
 					int n = Translator.ConstantManager.AddString(
 						eval.Value.Substring(0, eval.Value.Length));

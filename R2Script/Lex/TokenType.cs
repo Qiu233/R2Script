@@ -14,6 +14,7 @@ namespace R2Script.Lex
 		TK_NULL,
 		TK_NUMBER,
 		TK_STRING,
+		TK_CHARACTER,
 
 
 

@@ -619,7 +619,7 @@ namespace R2Script.Parse
 			{
 				return GetValueArray();
 			}
-			else if (Match(TokenType.TK_STRING))
+			else if (Match(TokenType.TK_STRING) || Match(TokenType.TK_CHARACTER))
 			{
 				var e = new Expr_Value(Line, File) { Value = Token.Value };
 				Accept();
@@ -630,11 +630,11 @@ namespace R2Script.Parse
 				Accept();//-
 				Expression e = T();//lowest
 				Expr_Binary eb = new Expr_Binary(Line, File);
-				eb.Operator = "*";
-				eb.Left = e;
+				eb.Operator = "-";
+				eb.Right = e;
 				Expr_Value ev = new Expr_Value(Line, File);
-				ev.Value = "-1";
-				eb.Right = ev;
+				ev.Value = "0";
+				eb.Left = ev;
 				return eb;
 			}
 			else if (Match('*'))//value
